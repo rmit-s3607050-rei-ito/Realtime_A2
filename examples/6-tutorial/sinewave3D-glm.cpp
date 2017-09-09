@@ -361,20 +361,20 @@ void drawGrid(int tess)
       r.z = -1.0 + j * stepSize;
 
       if (g.lighting) {
-	n.x = 0.0;
-	n.y = 1.0;
-	n.z = 0.0;
+      	n.x = 0.0;
+      	n.y = 1.0;
+      	n.z = 0.0;
       }
 
       rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
       if (g.lighting) {
-	nEC = normalMatrix * glm::normalize(n);
-	if (g.fixed) {
-	  glNormal3fv(&nEC[0]);
-	} else {
-	  glm::vec3 c = computeLighting(rEC, nEC);
-	  glColor3fv(&c[0]);
-	}
+      	nEC = normalMatrix * glm::normalize(n);
+      	if (g.fixed) {
+      	  glNormal3fv(&nEC[0]);
+      	} else {
+      	  glm::vec3 c = computeLighting(rEC, nEC);
+      	  glColor3fv(&c[0]);
+      	}
       }
       glVertex3fv(&rEC[0]);
 
@@ -382,13 +382,13 @@ void drawGrid(int tess)
 
       rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
       if (g.lighting) {
-	nEC = normalMatrix * glm::normalize(n);
-	if (g.fixed) {
-	  glNormal3fv(&nEC[0]);
-	} else {
-	  glm::vec3 c = computeLighting(rEC, nEC);
-	  glColor3fv(&c[0]);
-	}
+      	nEC = normalMatrix * glm::normalize(n);
+      	if (g.fixed) {
+      	  glNormal3fv(&nEC[0]);
+      	} else {
+      	  glm::vec3 c = computeLighting(rEC, nEC);
+      	  glColor3fv(&c[0]);
+      	}
       }
       glVertex3fv(&rEC[0]);
     }
@@ -405,16 +405,16 @@ void drawGrid(int tess)
   if (g.drawNormals) {
     for (j = 0; j <= tess; j++) {
       for (i = 0; i <= tess; i++) {
-	r.x = -1.0 + i * stepSize;
-	r.y = 0.0;
-	r.z = -1.0 + j * stepSize;
+      	r.x = -1.0 + i * stepSize;
+      	r.y = 0.0;
+      	r.z = -1.0 + j * stepSize;
 
-	n.y = 1.0;
-	n.x = 0.0;
-	n.z = 0.0;
-	rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
-	nEC = normalMatrix * glm::normalize(n);
-	drawVector(rEC, nEC, 0.05, true, yellow);
+      	n.y = 1.0;
+      	n.x = 0.0;
+      	n.z = 0.0;
+      	rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
+      	nEC = normalMatrix * glm::normalize(n);
+      	drawVector(rEC, nEC, 0.05, true, yellow);
       }
     }
   }
