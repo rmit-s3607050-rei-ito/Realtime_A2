@@ -3,6 +3,9 @@
  * $Id: sinewave3D-glm.cpp,v 1.8 2017/08/23 12:56:02 gl Exp gl $
  */
 
+// NOTE: need to be placed before #include, enables glUseProgram to work
+#define GL_GLEXT_PROTOTYPES
+
 #include <stdbool.h>
 #include <stdio.h>
 #include <math.h>
@@ -13,7 +16,6 @@
 
 #include "shaders.h"
 
-#define GL_GLEXT_PROTOTYPES
 #define GLM_FORCE_RADIANS
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -53,6 +55,7 @@ typedef struct {
   bool fixed;
   bool twoside;
   bool drawNormals;
+  bool useShaders;
   int width, height;
   int tess;
   int waveDim;
@@ -64,7 +67,7 @@ typedef struct {
   bool consolePM;
   bool multiView;
 } Global;
-Global g = { grid, false, 0.0, 0.0, line, true, false, false, false, 0, 0, 8, 2, 0, 0.0, 1.0, 0, false, false, false };
+Global g = { grid, false, 0.0, 0.0, line, true, false, false, false, false, 0, 0, 8, 2, 0, 0.0, 1.0, 0, false, false, false };
 
 typedef enum { inactive, rotate, pan, zoom } CameraControl;
 
@@ -334,6 +337,9 @@ void drawGrid(int tess)
   glm::vec3 r, n, rEC, nEC;
   int i, j;
 
+  if (g.useShaders)
+    glUseProgram(shaderProgram);
+
   if (g.lighting && g.fixed) {
     glEnable(GL_LIGHTING);
     glEnable(GL_LIGHT0);
@@ -397,9 +403,10 @@ void drawGrid(int tess)
 
   }
 
-  if (g.lighting) {
+  if (g.useShaders)
+    glUseProgram(0);
+  if (g.lighting)
     glDisable(GL_LIGHTING);
-  }
 
   // Normals
   if (g.drawNormals) {
@@ -435,6 +442,9 @@ void drawSineWave(int tess)
   glm::vec3 r, n, rEC, nEC;
   int i, j;
   float t = g.t;
+
+  if (g.useShaders)
+    glUseProgram(shaderProgram);
 
   if (g.lighting && g.fixed) {
     glEnable(GL_LIGHTING);
@@ -514,9 +524,10 @@ void drawSineWave(int tess)
     glEnd();
   }
 
-  if (g.lighting) {
+  if(g.useShaders)
+    glUseProgram(0);
+  if (g.lighting)
     glDisable(GL_LIGHTING);
-  }
 
   // Normals
   if (g.drawNormals) {
@@ -691,6 +702,13 @@ void keyboard(unsigned char key, int x, int y)
   case 27:
     printf("exit\n");
     exit(0);
+    break;
+  case 'g':
+    g.useShaders = !g.useShaders;
+    // if (g.useShaders)
+    //   glUseProgram(shaderProgram);
+    // else
+    //   glUseProgram(0);
     break;
   case 'a':
     g.animate = !g.animate;
