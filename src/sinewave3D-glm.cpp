@@ -3,6 +3,9 @@
  * $Id: sinewave3D-glm.cpp,v 1.8 2017/08/23 12:56:02 gl Exp gl $
  */
 
+// NOTE: need to be placed before #include, enables glUseProgram to work
+#define GL_GLEXT_PROTOTYPES
+
 #include <stdbool.h>
 #include <stdio.h>
 #include <math.h>
@@ -11,6 +14,7 @@
 #include <GL/glu.h>
 #include <GL/gl.h>
 
+#include "shaders.h"
 
 #define GLM_FORCE_RADIANS
 #include <glm/glm.hpp>
@@ -18,6 +22,10 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/constants.hpp>
 
+// Shader program used and vertex/fragment files
+static int shaderProgram;
+static const char* vertexFile = "./shader.vert";
+static const char* fragmentFile = "./shader.frag";
 
 typedef enum {
   d_drawSineWave,
@@ -47,6 +55,7 @@ typedef struct {
   bool fixed;
   bool twoside;
   bool drawNormals;
+  bool useShaders;
   int width, height;
   int tess;
   int waveDim;
@@ -58,7 +67,7 @@ typedef struct {
   bool consolePM;
   bool multiView;
 } Global;
-Global g = { grid, false, 0.0, 0.0, line, true, false, false, false, 0, 0, 8, 2, 0, 0.0, 1.0, 0, false, false, false };
+Global g = { grid, false, 0.0, 0.0, line, true, false, false, false, false, 0, 0, 8, 2, 0, 0.0, 1.0, 0, false, false, false };
 
 typedef enum { inactive, rotate, pan, zoom } CameraControl;
 
@@ -75,8 +84,8 @@ glm::vec3 yellow(1.0, 1.0, 0.0);
 glm::vec3 white(1.0, 1.0, 1.0);
 glm::vec3 grey(0.8, 0.8, 0.8);
 glm::vec3 black(0.0, 0.0, 0.0);
-const float shininess = 50.0;
 
+const float shininess = 50.0;
 const float milli = 1000.0;
 
 glm::mat4 modelViewMatrix;
@@ -89,7 +98,7 @@ void printVec(float *v, int n)
   int i;
 
   for (i = 0; i < n; i++)
-    printf("%5.3f ", v[i]); 
+    printf("%5.3f ", v[i]);
   printf("\n");
 }
 
@@ -98,7 +107,7 @@ void printMatrixLinear(float *m, int n)
   int i;
 
   for (i = 0; i < n; i++)
-    printf("%5.3f ", m[i]); 
+    printf("%5.3f ", m[i]);
   printf("\n");
 }
 
@@ -111,23 +120,26 @@ void printMatrixColumnMajor(float *m, int n)
       printf("%5.3f ", m[i*4+j]);
     }
     printf("\n");
-  } 
+  }
   printf("\n");
 }
 
-void init(void) 
+void init(void)
 {
   glClearColor(0.0, 0.0, 0.0, 1.0);
   if (g.twoside)
     glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
   glEnable(GL_DEPTH_TEST);
+
+  // Define the shader program using the input files (predefined)
+  shaderProgram = getShader(vertexFile, fragmentFile);
 }
 
 void reshape(int w, int h)
 {
   g.width = w;
   g.height = h;
-  glViewport(0, 0, (GLsizei) w, (GLsizei) h); 
+  glViewport(0, 0, (GLsizei) w, (GLsizei) h);
   glMatrixMode(GL_PROJECTION);
   glLoadIdentity();
   glOrtho(-1.0, 1.0, -1.0, 1.0, -100.0, 100.0);
@@ -141,7 +153,7 @@ void drawAxes(float length)
 
   glPushAttrib(GL_CURRENT_BIT);
   glBegin(GL_LINES);
-  
+
   /* x axis */
   glColor3f(1.0, 0.0, 0.0);
   v = modelViewMatrix * glm::vec4(-length, 0.0, 0.0, 1.0);
@@ -172,7 +184,7 @@ void drawVector(glm::vec3 & o, glm::vec3 & v, float s, bool normalize, glm::vec3
   glPushAttrib(GL_CURRENT_BIT);
   glColor3fv(&c[0]);
   glBegin(GL_LINES);
-  if (normalize) 
+  if (normalize)
     v = glm::normalize(v);
 
   glVertex3fv(&o[0]);
@@ -190,13 +202,13 @@ void consolePM()
   printf("tesselation:       %5d\n", g.tess);
 }
 
-// On screen display 
+// On screen display
 void displayOSD()
 {
   char buffer[30];
   char *bufp;
   int w, h;
-    
+
   glPushAttrib(GL_ENABLE_BIT | GL_CURRENT_BIT);
   glDisable(GL_DEPTH_TEST);
   glDisable(GL_LIGHTING);
@@ -205,7 +217,7 @@ void displayOSD()
   glPushMatrix();
   glLoadIdentity();
 
-  /* Set up orthographic coordinate system to match the window, 
+  /* Set up orthographic coordinate system to match the window,
      i.e. (0,0)-(w,h) */
   w = glutGet(GLUT_WINDOW_WIDTH);
   h = glutGet(GLUT_WINDOW_HEIGHT);
@@ -262,7 +274,7 @@ glm::vec3 computeLighting(glm::vec3 & rEC, glm::vec3 & nEC)
   // Note: it is a vec3 being constructed with a single value which
   // is used for all 3 components
   glm::vec3 color(0.0);
-  
+
   // Ambient contribution: A=La×Ma
   // Default light ambient color and default ambient material color
   // are both (0.2, 0.2, 0.2)
@@ -281,14 +293,14 @@ glm::vec3 computeLighting(glm::vec3 & rEC, glm::vec3 & nEC)
   float dp = glm::dot(nEC, lEC);
   if (dp > 0.0) {
     // Calculate diffuse and specular contribution
-    
+
     // Lambert diffuse: D=Ld×Md×cosθ
     // Ld: default diffuse light color for GL_LIGHT0 is white (1.0, 1.0, 1.0).
     // Md: default diffuse material color is grey (0.8, 0.8, 0.8).
     glm::vec3 Ld(1.0);
     glm::vec3 Md(0.8);
     // Need normalized normal to calculate cosθ,
-    // light vector <0, 0, 1> is already normalized 
+    // light vector <0, 0, 1> is already normalized
     nEC = glm::normalize(nEC);
     float NdotL = glm::dot(nEC, lEC);
     glm::vec3 diffuse(Ld * Md * NdotL);
@@ -325,6 +337,9 @@ void drawGrid(int tess)
   glm::vec3 r, n, rEC, nEC;
   int i, j;
 
+  if (g.useShaders)
+    glUseProgram(shaderProgram);
+
   if (g.lighting && g.fixed) {
     glEnable(GL_LIGHTING);
     glEnable(GL_LIGHT0);
@@ -352,20 +367,20 @@ void drawGrid(int tess)
       r.z = -1.0 + j * stepSize;
 
       if (g.lighting) {
-	n.x = 0.0;
-	n.y = 1.0;
-	n.z = 0.0;
+      	n.x = 0.0;
+      	n.y = 1.0;
+      	n.z = 0.0;
       }
 
       rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
       if (g.lighting) {
-	nEC = normalMatrix * glm::normalize(n);
-	if (g.fixed) {
-	  glNormal3fv(&nEC[0]);
-	} else {
-	  glm::vec3 c = computeLighting(rEC, nEC);
-	  glColor3fv(&c[0]);
-	}
+      	nEC = normalMatrix * glm::normalize(n);
+      	if (g.fixed) {
+      	  glNormal3fv(&nEC[0]);
+      	} else {
+      	  glm::vec3 c = computeLighting(rEC, nEC);
+      	  glColor3fv(&c[0]);
+      	}
       }
       glVertex3fv(&rEC[0]);
 
@@ -373,13 +388,13 @@ void drawGrid(int tess)
 
       rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
       if (g.lighting) {
-	nEC = normalMatrix * glm::normalize(n);
-	if (g.fixed) {
-	  glNormal3fv(&nEC[0]);
-	} else {
-	  glm::vec3 c = computeLighting(rEC, nEC);
-	  glColor3fv(&c[0]);
-	}
+      	nEC = normalMatrix * glm::normalize(n);
+      	if (g.fixed) {
+      	  glNormal3fv(&nEC[0]);
+      	} else {
+      	  glm::vec3 c = computeLighting(rEC, nEC);
+      	  glColor3fv(&c[0]);
+      	}
       }
       glVertex3fv(&rEC[0]);
     }
@@ -388,24 +403,25 @@ void drawGrid(int tess)
 
   }
 
-  if (g.lighting) {
+  if (g.useShaders)
+    glUseProgram(0);
+  if (g.lighting)
     glDisable(GL_LIGHTING);
-  }
 
   // Normals
   if (g.drawNormals) {
     for (j = 0; j <= tess; j++) {
       for (i = 0; i <= tess; i++) {
-	r.x = -1.0 + i * stepSize;
-	r.y = 0.0;
-	r.z = -1.0 + j * stepSize;
-	
-	n.y = 1.0;
-	n.x = 0.0;
-	n.z = 0.0;
-	rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
-	nEC = normalMatrix * glm::normalize(n);
-	drawVector(rEC, nEC, 0.05, true, yellow);
+      	r.x = -1.0 + i * stepSize;
+      	r.y = 0.0;
+      	r.z = -1.0 + j * stepSize;
+
+      	n.y = 1.0;
+      	n.x = 0.0;
+      	n.z = 0.0;
+      	rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
+      	nEC = normalMatrix * glm::normalize(n);
+      	drawVector(rEC, nEC, 0.05, true, yellow);
       }
     }
   }
@@ -416,8 +432,8 @@ void drawGrid(int tess)
   }
 }
 
-  
-  
+
+
 void drawSineWave(int tess)
 {
   const float A1 = 0.25, k1 = 2.0 * M_PI, w1 = 0.25;
@@ -426,6 +442,9 @@ void drawSineWave(int tess)
   glm::vec3 r, n, rEC, nEC;
   int i, j;
   float t = g.t;
+
+  if (g.useShaders)
+    glUseProgram(shaderProgram);
 
   if (g.lighting && g.fixed) {
     glEnable(GL_LIGHTING);
@@ -454,84 +473,82 @@ void drawSineWave(int tess)
       r.z = -1.0 + j * stepSize;
 
       if (g.waveDim == 2) {
-	r.y = A1 * sinf(k1 * r.x + w1 * t);
-	if (g.lighting) {
-	  n.x = - A1 * k1 * cosf(k1 * r.x + w1 * t);
-	  n.y = 1.0;
-	  n.z = 0.0;
-	}
+      	r.y = A1 * sinf(k1 * r.x + w1 * t);
+      	if (g.lighting) {
+      	  n.x = - A1 * k1 * cosf(k1 * r.x + w1 * t);
+      	  n.y = 1.0;
+      	  n.z = 0.0;
+      	}
       } else if (g.waveDim == 3) {
-	r.y = A1 * sinf(k1 * r.x + w1 * t) + A2 * sinf(k2 * r.z + w2 * t);
-	if (g.lighting) {
-	  n.x = - A1 * k1 * cosf(k1 * r.x + w1 * t);
-	  n.y = 1.0;
-	  n.z = - A2 * k2 * cosf(k2 * r.z + w2 * t);
-	}
+      	r.y = A1 * sinf(k1 * r.x + w1 * t) + A2 * sinf(k2 * r.z + w2 * t);
+      	if (g.lighting) {
+      	  n.x = - A1 * k1 * cosf(k1 * r.x + w1 * t);
+      	  n.y = 1.0;
+      	  n.z = - A2 * k2 * cosf(k2 * r.z + w2 * t);
+      	}
       }
 
       rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
       if (g.lighting) {
-	nEC = normalMatrix * glm::normalize(n);
-	if (g.fixed) {
-	  glNormal3fv(&nEC[0]);
-	} else {
-
-	  glm::vec3 c = computeLighting(rEC, nEC);
-	  glColor3fv(&c[0]);
-	}
+      	nEC = normalMatrix * glm::normalize(n);
+      	if (g.fixed) {
+      	  glNormal3fv(&nEC[0]);
+      	} else {
+      	  glm::vec3 c = computeLighting(rEC, nEC);
+      	  glColor3fv(&c[0]);
+      	}
       }
       glVertex3fv(&rEC[0]);
 
       r.z += stepSize;
 
       if (g.waveDim == 3) {
-	r.y = A1 * sinf(k1 * r.x + w1 * t) + A2 * sinf(k2 * r.z + w2 * t);
-	if (g.lighting) {
-	  n.z = - A2 * k2 * cosf(k2 * r.z + w2 * t);
-	}
+      	r.y = A1 * sinf(k1 * r.x + w1 * t) + A2 * sinf(k2 * r.z + w2 * t);
+      	if (g.lighting) {
+      	  n.z = - A2 * k2 * cosf(k2 * r.z + w2 * t);
+      	}
       }
 
       rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
       if (g.lighting) {
-	nEC = normalMatrix * glm::normalize(n);
-	if (g.fixed) {
-	  glNormal3fv(&nEC[0]);
-	} else {
-	  glm::vec3 c = computeLighting(rEC, nEC);
-	  glColor3fv(&c[0]);
-	}
+      	nEC = normalMatrix * glm::normalize(n);
+      	if (g.fixed) {
+      	  glNormal3fv(&nEC[0]);
+      	} else {
+      	  glm::vec3 c = computeLighting(rEC, nEC);
+      	  glColor3fv(&c[0]);
+      	}
       }
       glVertex3fv(&rEC[0]);
     }
-
     glEnd();
-
   }
 
-  if (g.lighting) {
+  if(g.useShaders)
+    glUseProgram(0);
+  if (g.lighting)
     glDisable(GL_LIGHTING);
-  }
 
   // Normals
   if (g.drawNormals) {
     for (j = 0; j <= tess; j++) {
       for (i = 0; i <= tess; i++) {
-	r.x = -1.0 + i * stepSize;
-	r.z = -1.0 + j * stepSize;
+      	r.x = -1.0 + i * stepSize;
+      	r.z = -1.0 + j * stepSize;
 
-	n.y = 1.0;
-	n.x = - A1 * k1 * cosf(k1 * r.x + w1 * t);
-	if (g.waveDim == 2) {
-	  r.y = A1 * sinf(k1 * r.x + w1 * t);
-	  n.z = 0.0;
-	} else {
-	  r.y = A1 * sinf(k1 * r.x + w1 * t) + A2 * sinf(k2 * r.z + w2 * t);
-	  n.z = - A2 * k2 * cosf(k2 * r.z + w2 * t);
-	}
+      	n.y = 1.0;
+      	n.x = - A1 * k1 * cosf(k1 * r.x + w1 * t);
+      	if (g.waveDim == 2) {
+      	  r.y = A1 * sinf(k1 * r.x + w1 * t);
+      	  n.z = 0.0;
+      	} else {
+      	  r.y = A1 * sinf(k1 * r.x + w1 * t) + A2 * sinf(k2 * r.z + w2 * t);
+      	  n.z = - A2 * k2 * cosf(k2 * r.z + w2 * t);
+      	}
 
-	rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
-	nEC = normalMatrix * glm::normalize(n);
-	drawVector(rEC, nEC, 0.05, true, yellow);
+      	rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
+      	nEC = normalMatrix * glm::normalize(n);
+      	drawVector(rEC, nEC, 0.05, true, yellow);
       }
     }
   }
@@ -551,7 +568,7 @@ void idle()
 
   // Accumulate time if animation enabled
   if (g.animate) {
-    dt = t - g.lastT; 
+    dt = t - g.lastT;
     g.t += dt;
     g.lastT = t;
     if (debug[d_animation])
@@ -627,11 +644,11 @@ void displayMultiView()
     consolePM();
 
   g.frameCount++;
-  
+
   glutSwapBuffers();
 
 }
-    
+
 void display()
 {
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -678,7 +695,7 @@ void display()
     printf("display: %s\n", gluErrorString(err));
   }
 }
-    
+
 void keyboard(unsigned char key, int x, int y)
 {
   switch (key) {
@@ -686,11 +703,18 @@ void keyboard(unsigned char key, int x, int y)
     printf("exit\n");
     exit(0);
     break;
+  case 'g':
+    g.useShaders = !g.useShaders;
+    // if (g.useShaders)
+    //   glUseProgram(shaderProgram);
+    // else
+    //   glUseProgram(0);
+    break;
   case 'a':
     g.animate = !g.animate;
     if (g.animate) {
       g.lastT = glutGet(GLUT_ELAPSED_TIME) / milli;
-    } 
+    }
     break;
   case 'l':
     g.lighting = !g.lighting;
@@ -818,11 +842,11 @@ int main(int argc, char** argv)
 {
   glutInit(&argc, argv);
   glutInitDisplayMode (GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
-  glutInitWindowSize (1024, 1024); 
+  glutInitWindowSize (1024, 1024);
   glutInitWindowPosition (100, 100);
   glutCreateWindow (argv[0]);
   init();
-  glutDisplayFunc(display); 
+  glutDisplayFunc(display);
   glutReshapeFunc(reshape);
   glutIdleFunc(idle);
   glutKeyboardFunc(keyboard);
