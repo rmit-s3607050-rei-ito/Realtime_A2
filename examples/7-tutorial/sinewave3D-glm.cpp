@@ -97,6 +97,15 @@ glm::mat3 normalMatrix;
 
 int err;
 
+/* Shading calculations and variable assignments
+ */
+
+void useShaders() {
+  glUseProgram(shaderProgram);
+  glUniformMatrix4fv(mvMatLoc, 1, false, &modelViewMatrix[0][0]);
+  glUniform3fv(colorLoc, 1, glm::value_ptr(red));
+}
+
 void printVec(float *v, int n)
 {
   int i;
@@ -156,6 +165,10 @@ void reshape(int w, int h)
 
 void drawAxes(float length)
 {
+  // Disable shaders for axes
+  if (g.useShaders)
+    glUseProgram(0);
+
   glm::vec4 v;
 
   glPushAttrib(GL_CURRENT_BIT);
@@ -264,7 +277,6 @@ void displayOSD()
 glPopAttrib();
 }
 
-
 /* Perform ADS - ambient, diffuse and specular - lighting calculation
  * in eye coordinates (EC).
  */
@@ -344,6 +356,8 @@ void drawGrid(int tess)
   glm::vec3 r, n, rEC, nEC;
   int i, j;
 
+  if(g.useShaders)
+    useShaders();
   if (g.lighting && g.fixed) {
     glEnable(GL_LIGHTING);
     glEnable(GL_LIGHT0);
@@ -447,6 +461,8 @@ void drawSineWave(int tess)
   int i, j;
   float t = g.t;
 
+  if(g.useShaders)
+    useShaders();
   if (g.lighting && g.fixed) {
     glEnable(GL_LIGHTING);
     glEnable(GL_LIGHT0);
@@ -596,9 +612,6 @@ void displayMultiView()
   glm::mat4 modelViewMatrixSave(modelViewMatrix);
   glm::mat3 normalMatrixSave(normalMatrix);
 
-  if (g.useShaders)
-    glUniformMatrix4fv(mvMatLoc, 1, false, &modelViewMatrix[0][0]);
-
   // Front view
   modelViewMatrix = glm::mat4(1.0);
   glViewport(g.width / 16.0, g.height * 9.0 / 16.0, g.width * 6.0 / 16.0, g.height * 6.0 / 16.0);
@@ -680,23 +693,16 @@ void display()
 
   drawAxes(5.0);
 
+  if (g.shape == grid)
+    drawGrid(g.tess);
+  else
+    drawSineWave(g.tess);
+
   if (g.displayOSD)
     displayOSD();
 
   if (g.consolePM)
     consolePM();
-
-  // Use shading program for grid/sine wave (if on) and assign matrix + color
-  if (g.useShaders) {
-    glUseProgram(shaderProgram);
-    glUniformMatrix4fv(mvMatLoc, 1, false, &modelViewMatrix[0][0]);
-    glUniform3fv(colorLoc, 1, glm::value_ptr(red));
-  }
-
-  if (g.shape == grid)
-    drawGrid(g.tess);
-  else
-    drawSineWave(g.tess);
 
   glutSwapBuffers();
 

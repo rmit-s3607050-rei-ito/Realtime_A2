@@ -1,15 +1,7 @@
 //shader.vert
 varying vec3 color;
 
-float powf(float x, float y) {
-  for (int i = 0; i < y; i++) {
-    x *= x;
-  }
-
-  return x;
-}
-
-vec3 computeLighting(vec3 rEC, vec3 nEC) {
+vec3 computeLighting(vec4 rEC, vec3 nEC) {
   float shininess = 50.0;
   // Using computeLighting() from sinewave3D-glm.cpp (modified to work)
 
@@ -42,7 +34,7 @@ vec3 computeLighting(vec3 rEC, vec3 nEC) {
     float NdotH = dot(nEC, H);
     if (NdotH < 0.0)
       NdotH = 0.0;
-    vec3 specular = (Ls * Ms * powf(NdotH, shininess));
+    vec3 specular = (Ls * Ms * pow(NdotH, shininess));
     color += specular;
   }
 
