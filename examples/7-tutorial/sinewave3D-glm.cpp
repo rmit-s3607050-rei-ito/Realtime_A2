@@ -27,6 +27,7 @@ static int shaderProgram;
 // uniform variables used in shader
 static GLint colorLoc;
 static GLint mvMatLoc;
+static GLint nMatLoc;
 static const char* vertexFile = "./shader.vert";
 static const char* fragmentFile = "./shader.frag";
 
@@ -101,7 +102,10 @@ int err;
  */
 
 void useShaders() {
+  // Set program to use for shaders
   glUseProgram(shaderProgram);
+  // Assign variables inside shader program: normalMatrix, modelViewMatrix, color
+  glUniformMatrix3fv(nMatLoc, 1, false, &normalMatrix[0][0]);
   glUniformMatrix4fv(mvMatLoc, 1, false, &modelViewMatrix[0][0]);
   glUniform3fv(colorLoc, 1, glm::value_ptr(red));
 }
@@ -148,6 +152,7 @@ void init(void)
   shaderProgram = getShader(vertexFile, fragmentFile);
   // Obtain variables from shaderProgram to allocate
   colorLoc = glGetUniformLocation(shaderProgram, "uColor");
+  nMatLoc = glGetUniformLocation(shaderProgram, "nMat");
   mvMatLoc = glGetUniformLocation(shaderProgram, "mvMat");
 }
 
@@ -197,6 +202,9 @@ void drawAxes(float length)
 
   glEnd();
   glPopAttrib();
+
+  if (g.useShaders)
+    glUseProgram(shaderProgram);
 }
 
 void drawVector(glm::vec3 & o, glm::vec3 & v, float s, bool normalize, glm::vec3 & c)
@@ -356,8 +364,6 @@ void drawGrid(int tess)
   glm::vec3 r, n, rEC, nEC;
   int i, j;
 
-  if(g.useShaders)
-    useShaders();
   if (g.lighting && g.fixed) {
     glEnable(GL_LIGHTING);
     glEnable(GL_LIGHT0);
@@ -390,9 +396,16 @@ void drawGrid(int tess)
       	n.z = 0.0;
       }
 
-      rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
+      if (g.useShaders)
+        rEC = glm::vec3(glm::vec4(r, 1.0));
+      else
+        rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
+
       if (g.lighting) {
-      	nEC = normalMatrix * glm::normalize(n);
+        if (g.useShaders)
+          nEC = glm::normalize(n);
+        else
+          nEC = normalMatrix * glm::normalize(n);
       	if (g.fixed) {
       	  glNormal3fv(&nEC[0]);
       	} else {
@@ -404,9 +417,15 @@ void drawGrid(int tess)
 
       r.z += stepSize;
 
-      rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
+      if (g.useShaders)
+        rEC = glm::vec3(glm::vec4(r, 1.0));
+      else
+        rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
       if (g.lighting) {
-      	nEC = normalMatrix * glm::normalize(n);
+        if (g.useShaders)
+          nEC = glm::normalize(n);
+        else
+          nEC = normalMatrix * glm::normalize(n);
       	if (g.fixed) {
       	  glNormal3fv(&nEC[0]);
       	} else {
@@ -437,7 +456,11 @@ void drawGrid(int tess)
       	n.y = 1.0;
       	n.x = 0.0;
       	n.z = 0.0;
-      	rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
+
+        if (g.useShaders)
+          rEC = glm::vec3(glm::vec4(r, 1.0));
+        else
+          rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
       	nEC = normalMatrix * glm::normalize(n);
       	drawVector(rEC, nEC, 0.05, true, yellow);
       }
@@ -461,8 +484,6 @@ void drawSineWave(int tess)
   int i, j;
   float t = g.t;
 
-  if(g.useShaders)
-    useShaders();
   if (g.lighting && g.fixed) {
     glEnable(GL_LIGHTING);
     glEnable(GL_LIGHT0);
@@ -505,9 +526,16 @@ void drawSineWave(int tess)
       	}
       }
 
-      rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
+      if (g.useShaders)
+        rEC = glm::vec3(glm::vec4(r, 1.0));
+      else
+        rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
+
       if (g.lighting) {
-      	nEC = normalMatrix * glm::normalize(n);
+        if (g.useShaders)
+          nEC = glm::normalize(n);
+        else
+          nEC = normalMatrix * glm::normalize(n);
       	if (g.fixed) {
       	  glNormal3fv(&nEC[0]);
       	} else {
@@ -526,9 +554,16 @@ void drawSineWave(int tess)
       	}
       }
 
-      rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
+      if (g.useShaders)
+        rEC = glm::vec3(glm::vec4(r, 1.0));
+      else
+        rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
+
       if (g.lighting) {
-      	nEC = normalMatrix * glm::normalize(n);
+        if (g.useShaders)
+          nEC = glm::normalize(n);
+        else
+          nEC = normalMatrix * glm::normalize(n);
       	if (g.fixed) {
       	  glNormal3fv(&nEC[0]);
       	} else {
@@ -563,8 +598,12 @@ void drawSineWave(int tess)
       	  n.z = - A2 * k2 * cosf(k2 * r.z + w2 * t);
       	}
 
-      	rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
-      	nEC = normalMatrix * glm::normalize(n);
+        if (g.useShaders)
+          rEC = glm::vec3(glm::vec4(r, 1.0));
+        else
+          rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
+        // nEC = normalMatrix * glm::normalize(n);
+      	nEC = glm::normalize(n);
       	drawVector(rEC, nEC, 0.05, true, yellow);
       }
     }
@@ -620,7 +659,6 @@ void displayMultiView()
     drawGrid(g.tess);
   else
     drawSineWave(g.tess);
-
 
   // Top view
   modelViewMatrix = glm::mat4(1.0);
@@ -691,8 +729,10 @@ void display()
     printMatrixColumnMajor(&normalMatrix[0][0], 3);
   }
 
-  drawAxes(5.0);
+  if(g.useShaders)
+    useShaders();
 
+  drawAxes(5.0);
   if (g.shape == grid)
     drawGrid(g.tess);
   else
