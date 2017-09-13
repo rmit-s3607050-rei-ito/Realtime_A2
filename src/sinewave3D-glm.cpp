@@ -1,10 +1,11 @@
-﻿/*
+/*
  * Simple 3D sine wave animation example using glm
  * $Id: sinewave3D-glm.cpp,v 1.8 2017/08/23 12:56:02 gl Exp gl $
  */
 
-// NOTE: need to be placed before #include, enables glUseProgram to work
-#define GL_GLEXT_PROTOTYPES
+ // NOTE: need to be placed before #include, enables glUseProgram to work
+ #define GL_GLEXT_PROTOTYPES
+ #include "shaders.h"
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -13,8 +14,6 @@
 #include <GL/glut.h>
 #include <GL/glu.h>
 #include <GL/gl.h>
-
-#include "shaders.h"
 
 #define GLM_FORCE_RADIANS
 #include <glm/glm.hpp>
@@ -26,6 +25,8 @@
 static int shaderProgram;
 static const char* vertexFile = "./shader.vert";
 static const char* fragmentFile = "./shader.frag";
+static GLint shineLoc, phongLoc, pixelLoc, lightingLoc;
+static GLint fragShineLoc, fragPhongLoc, fragPixelLoc;
 
 typedef enum {
   d_drawSineWave,
@@ -39,23 +40,28 @@ typedef enum {
   d_nflags
 } DebugFlags;
 
-bool debug[d_nflags] = { false, false, false, false, false, false, false, false };
+bool debug[d_nflags] =
+{
+  false, //d_drawSineWave
+  false, //d_mouse
+  false, //d_key
+  false, //d_animation
+  false, //d_lighting
+  false, //d_OSD
+  false, //d_matrices
+  false, //d_computeLighting
+};
 
 typedef struct { float r, g, b; } color3f;
 
-typedef enum { line, fill } polygonMode_t;
-typedef enum { grid, wave } shape_t;
+typedef enum { FRAME, FLAGS, VALUES } OSD;
 
 typedef struct {
-  shape_t shape;
   bool animate;
   float t, lastT;
-  polygonMode_t polygonMode;
   bool lighting;
-  bool fixed;
   bool twoside;
   bool drawNormals;
-  bool useShaders;
   int width, height;
   int tess;
   int waveDim;
@@ -66,8 +72,54 @@ typedef struct {
   bool displayOSD;
   bool consolePM;
   bool multiView;
+
+  // new
+  bool flat;
+  bool positional;
+  bool fixed;
+  bool useShaders;
+  float shininess;
+  bool phong;
+  OSD option;
+  bool perPixel;
+  bool wave;
+  bool vbo;
+  bool wireframe;
 } Global;
-Global g = { grid, false, 0.0, 0.0, line, true, false, false, false, false, 0, 0, 8, 2, 0, 0.0, 1.0, 0, false, false, false };
+
+Global g =
+{
+  false, //animate
+  0.0, //t
+  0.0, //lastT
+  true, //lighting
+  false, //twoSide
+  false, //drawNormals
+  0, //width
+  0, //height
+  8, //tess
+  2, //waveDim
+  0, //frameCount
+  0.0, //frameRate
+  1.0, //displayStatsInterval
+  0, //lastStatsDisplayT
+  true, //displayOSD
+  false, //consolePM
+  false, //multiView
+
+  // new
+  false, //flat
+  false, //positional
+  false, //fixed
+  false, //useShaders
+  50.0, //shininess
+  false, //phong
+  FRAME, //option
+  false, //perPixel
+  false, //wave
+  false, //vbo
+  false, //wireframe
+};
 
 typedef enum { inactive, rotate, pan, zoom } CameraControl;
 
@@ -85,7 +137,7 @@ glm::vec3 white(1.0, 1.0, 1.0);
 glm::vec3 grey(0.8, 0.8, 0.8);
 glm::vec3 black(0.0, 0.0, 0.0);
 
-const float shininess = 50.0;
+//const float shininess = 50.0;
 const float milli = 1000.0;
 
 glm::mat4 modelViewMatrix;
@@ -133,6 +185,13 @@ void init(void)
 
   // Define the shader program using the input files (predefined)
   shaderProgram = getShader(vertexFile, fragmentFile);
+  shineLoc = glGetUniformLocation(shaderProgram, "shininess");
+  phongLoc = glGetUniformLocation(shaderProgram, "phong");
+  pixelLoc = glGetUniformLocation(shaderProgram, "perPixel");
+  fragShineLoc = glGetUniformLocation(shaderProgram, "fragShininess");
+  fragPhongLoc = glGetUniformLocation(shaderProgram, "fragPhong");
+  fragPixelLoc = glGetUniformLocation(shaderProgram, "fragPixel");
+  lightingLoc = glGetUniformLocation(shaderProgram, "lighting");
 }
 
 void reshape(int w, int h)
@@ -179,7 +238,8 @@ void drawAxes(float length)
   glPopAttrib();
 }
 
-void drawVector(glm::vec3 & o, glm::vec3 & v, float s, bool normalize, glm::vec3 & c)
+void drawVector(glm::vec3 & o, glm::vec3 & v, float s,
+  bool normalize, glm::vec3 & c)
 {
   glPushAttrib(GL_CURRENT_BIT);
   glColor3fv(&c[0]);
@@ -197,9 +257,34 @@ void drawVector(glm::vec3 & o, glm::vec3 & v, float s, bool normalize, glm::vec3
 // Console performance meter
 void consolePM()
 {
-  printf("frame rate (f/s):  %5.0f\n", g.frameRate);
-  printf("frame time (ms/f): %5.0f\n", 1.0 / g.frameRate * 1000.0);
-  printf("tesselation:       %5d\n", g.tess);
+  if (g.option == FRAME) {
+    printf("FRAME\n"); //OSD option
+    printf("frame rate (f/s):  %5.0f\n", g.frameRate);
+    printf("frame time (ms/f): %5.0f\n", 1.0 / g.frameRate * 1000.0);
+  }
+  else if (g.option == FLAGS) {
+    printf("FLAGS\n"); //OSD option
+    printf("animation: %s\n", g.animate?"true":"false");
+    printf("flat: %s\n", g.flat?"true":"false");
+    printf("console: %s\n", g.consolePM?"true":"false");
+    printf("positional: %s\n", g.positional?"true":"false");
+    printf("fixed: %s\n", g.fixed?"true":"false");
+    printf("shaders: %s\n", g.useShaders?"true":"false");
+    printf("lighting: %s\n", g.lighting?"true":"false");
+    printf("phong: %s\n", g.phong?"true":"false");
+    printf("normals: %s\n", g.drawNormals?"true":"false");
+    printf("per pixel: %s\n", g.perPixel?"true":"false");
+    printf("wave: %s\n", g.wave?"true":"false");
+    printf("vbo: %s\n", g.vbo?"true":"false");
+    printf("multiview: %s\n", g.multiView?"true":"false");
+    printf("wireframe: %s\n", g.wireframe?"true":"false");
+  }
+  else if (g.option == VALUES) {
+    printf("VALUES\n"); //OSD option
+    printf("shininess: %.2f\n", g.shininess);
+    printf("tesselation: %d\n", g.tess);
+    printf("dimension: %d\n", g.waveDim);
+  }
 }
 
 // On screen display
@@ -227,26 +312,124 @@ void displayOSD()
   glPushMatrix();
   glLoadIdentity();
 
-  /* Frame rate */
   glColor3f(1.0, 1.0, 0.0);
-  glRasterPos2i(10, 60);
-  snprintf(buffer, sizeof buffer, "frame rate (f/s):  %5.0f", g.frameRate);
-  for (bufp = buffer; *bufp; bufp++)
-    glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *bufp);
-
-  /* Frame time */
-  glColor3f(1.0, 1.0, 0.0);
-  glRasterPos2i(10, 40);
-  snprintf(buffer, sizeof buffer, "frame time (ms/f): %5.0f", 1.0 / g.frameRate * milli);
-  for (bufp = buffer; *bufp; bufp++)
-    glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *bufp);
-
-  /* Tesselation */
-  glColor3f(1.0, 1.0, 0.0);
-  glRasterPos2i(10, 20);
-  snprintf(buffer, sizeof buffer, "tesselation:       %5d", g.tess);
-  for (bufp = buffer; *bufp; bufp++)
-    glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *bufp);
+  if (g.option == FRAME) {
+    // OSD option
+    glRasterPos2i(10, 40);
+    snprintf(buffer, sizeof buffer, "FRAME (o)");
+    for (bufp = buffer; *bufp; bufp++)
+      glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *bufp);
+    // Frame rate
+    glRasterPos2i(10, 25);
+    snprintf(buffer, sizeof buffer, "frame rate (f/s):  %5.0f", g.frameRate);
+    for (bufp = buffer; *bufp; bufp++)
+      glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *bufp);
+    // Frame time
+    glRasterPos2i(10, 10);
+    snprintf(buffer, sizeof buffer, "frame time (ms/f): %5.0f",
+      1.0 / g.frameRate * milli);
+    for (bufp = buffer; *bufp; bufp++)
+      glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *bufp);
+  }
+  else if (g.option == FLAGS) {
+    // OSD option
+    glRasterPos2i(10, 220);
+    snprintf(buffer, sizeof buffer, "FLAGS (o)");
+    for (bufp = buffer; *bufp; bufp++)
+      glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *bufp);
+    // animation
+    glRasterPos2i(10, 205);
+    snprintf(buffer, sizeof buffer, "animation (a): %s", g.animate?"true":"false");
+    for (bufp = buffer; *bufp; bufp++)
+      glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *bufp);
+    // shader type
+    glRasterPos2i(10, 190);
+    snprintf(buffer, sizeof buffer, "flat (b): %s", g.flat?"true":"false");
+    for (bufp = buffer; *bufp; bufp++)
+      glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *bufp);
+    // console output
+    glRasterPos2i(10, 175);
+    snprintf(buffer, sizeof buffer, "console (c): %s", g.consolePM?"true":"false");
+    for (bufp = buffer; *bufp; bufp++)
+      glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *bufp);
+    // light type
+    glRasterPos2i(10, 160);
+    snprintf(buffer, sizeof buffer, "positional (d): %s", g.positional?"true":"false");
+    for (bufp = buffer; *bufp; bufp++)
+      glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *bufp);
+    // fixed
+    glRasterPos2i(10, 145);
+    snprintf(buffer, sizeof buffer, "fixed (f): %s", g.fixed?"true":"false");
+    for (bufp = buffer; *bufp; bufp++)
+      glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *bufp);
+    // shaders
+    glRasterPos2i(10, 130);
+    snprintf(buffer, sizeof buffer, "shaders (g): %s", g.useShaders?"true":"false");
+    for (bufp = buffer; *bufp; bufp++)
+      glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *bufp);
+    // lighting
+    glRasterPos2i(10, 115);
+    snprintf(buffer, sizeof buffer, "lighting (l): %s", g.lighting?"true":"false");
+    for (bufp = buffer; *bufp; bufp++)
+      glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *bufp);
+    // lighting calculation method
+    glRasterPos2i(10, 100);
+    snprintf(buffer, sizeof buffer, "phong (m): %s", g.phong?"true":"false");
+    for (bufp = buffer; *bufp; bufp++)
+      glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *bufp);
+    // normals
+    glRasterPos2i(10, 85);
+    snprintf(buffer, sizeof buffer, "normals (n): %s", g.drawNormals?"true":"false");
+    for (bufp = buffer; *bufp; bufp++)
+      glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *bufp);
+    // lighting calculation type
+    glRasterPos2i(10, 70);
+    snprintf(buffer, sizeof buffer, "per pixel (p): %s", g.perPixel?"true":"false");
+    for (bufp = buffer; *bufp; bufp++)
+      glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *bufp);
+    // shape
+    glRasterPos2i(10, 55);
+    snprintf(buffer, sizeof buffer, "wave (s): %s", g.wave?"true":"false");
+    for (bufp = buffer; *bufp; bufp++)
+      glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *bufp);
+    // vbos
+    glRasterPos2i(10, 40);
+    snprintf(buffer, sizeof buffer, "vbo (v): %s", g.vbo?"true":"false");
+    for (bufp = buffer; *bufp; bufp++)
+      glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *bufp);
+    // multiview
+    glRasterPos2i(10, 25);
+    snprintf(buffer, sizeof buffer, "multiview (4): %s", g.multiView?"true":"false");
+    for (bufp = buffer; *bufp; bufp++)
+      glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *bufp);
+    // wireframe
+    glRasterPos2i(10, 10);
+    snprintf(buffer, sizeof buffer, "wireframe (w): %s", g.wireframe?"true":"false");
+    for (bufp = buffer; *bufp; bufp++)
+      glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *bufp);
+  }
+  else if (g.option == VALUES) {
+    // OSD option
+    glRasterPos2i(10, 55);
+    snprintf(buffer, sizeof buffer, "VALUES (o)");
+    for (bufp = buffer; *bufp; bufp++)
+      glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *bufp);
+    // shininess
+    glRasterPos2i(10, 40);
+    snprintf(buffer, sizeof buffer, "shininess (H/h): %.2f", g.shininess);
+    for (bufp = buffer; *bufp; bufp++)
+      glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *bufp);
+    // tesselation
+    glRasterPos2i(10, 25);
+    snprintf(buffer, sizeof buffer, "tesselation (+/-): %d", g.tess);
+    for (bufp = buffer; *bufp; bufp++)
+      glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *bufp);
+    // dimention
+    glRasterPos2i(10, 10);
+    snprintf(buffer, sizeof buffer, "dimension (z): %d", g.waveDim);
+    for (bufp = buffer; *bufp; bufp++)
+      glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *bufp);
+  }
 
   glPopMatrix();  /* Pop modelview */
   glMatrixMode(GL_PROJECTION);
@@ -254,9 +437,8 @@ void displayOSD()
   glPopMatrix();  /* Pop projection */
   glMatrixMode(GL_MODELVIEW);
 
-glPopAttrib();
+  glPopAttrib();
 }
-
 
 /* Perform ADS - ambient, diffuse and specular - lighting calculation
  * in eye coordinates (EC).
@@ -324,7 +506,7 @@ glm::vec3 computeLighting(glm::vec3 & rEC, glm::vec3 & nEC)
     float NdotH = glm::dot(nEC, H);
     if (NdotH < 0.0)
       NdotH = 0.0;
-    glm::vec3 specular(Ls * Ms * powf(NdotH, shininess));
+    glm::vec3 specular(Ls * Ms * powf(NdotH, g.shininess));
     color += specular;
   }
 
@@ -337,10 +519,18 @@ void drawGrid(int tess)
   glm::vec3 r, n, rEC, nEC;
   int i, j;
 
-  if (g.useShaders)
+  if (g.useShaders) {
     glUseProgram(shaderProgram);
+    glUniform1f(shineLoc, g.shininess);
+    glUniform1i(phongLoc, g.phong);
+    glUniform1i(pixelLoc, g.perPixel);
+    glUniform1f(fragShineLoc, g.shininess);
+    glUniform1i(fragPhongLoc, g.phong);
+    glUniform1i(fragPixelLoc, g.perPixel);
+    glUniform1i(lightingLoc, g.lighting);
+  }
 
-  if (g.lighting && g.fixed) {
+  else if (g.lighting && g.fixed) {
     glEnable(GL_LIGHTING);
     glEnable(GL_LIGHT0);
     glEnable(GL_NORMALIZE);
@@ -348,13 +538,13 @@ void drawGrid(int tess)
     if (g.twoside)
       glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
     glMaterialfv(GL_FRONT, GL_SPECULAR, &white[0]);
-    glMaterialf(GL_FRONT, GL_SHININESS, shininess);
+    glMaterialf(GL_FRONT, GL_SHININESS, g.shininess);
   } else {
     glDisable(GL_LIGHTING);
     glColor3fv(&cyan[0]);
   }
 
-  if (g.polygonMode == line)
+  if (g.wireframe)
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
   else
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
@@ -367,20 +557,20 @@ void drawGrid(int tess)
       r.z = -1.0 + j * stepSize;
 
       if (g.lighting) {
-      	n.x = 0.0;
-      	n.y = 1.0;
-      	n.z = 0.0;
+        n.x = 0.0;
+        n.y = 1.0;
+        n.z = 0.0;
       }
 
       rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
       if (g.lighting) {
-      	nEC = normalMatrix * glm::normalize(n);
-      	if (g.fixed) {
-      	  glNormal3fv(&nEC[0]);
-      	} else {
-      	  glm::vec3 c = computeLighting(rEC, nEC);
-      	  glColor3fv(&c[0]);
-      	}
+        nEC = normalMatrix * glm::normalize(n);
+        if (g.fixed) {
+          glNormal3fv(&nEC[0]);
+        } else {
+          glm::vec3 c = computeLighting(rEC, nEC);
+          glColor3fv(&c[0]);
+        }
       }
       glVertex3fv(&rEC[0]);
 
@@ -388,13 +578,13 @@ void drawGrid(int tess)
 
       rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
       if (g.lighting) {
-      	nEC = normalMatrix * glm::normalize(n);
-      	if (g.fixed) {
-      	  glNormal3fv(&nEC[0]);
-      	} else {
-      	  glm::vec3 c = computeLighting(rEC, nEC);
-      	  glColor3fv(&c[0]);
-      	}
+        nEC = normalMatrix * glm::normalize(n);
+        if (g.fixed) {
+          glNormal3fv(&nEC[0]);
+        } else {
+          glm::vec3 c = computeLighting(rEC, nEC);
+          glColor3fv(&c[0]);
+        }
       }
       glVertex3fv(&rEC[0]);
     }
@@ -405,6 +595,7 @@ void drawGrid(int tess)
 
   if (g.useShaders)
     glUseProgram(0);
+
   if (g.lighting)
     glDisable(GL_LIGHTING);
 
@@ -412,16 +603,16 @@ void drawGrid(int tess)
   if (g.drawNormals) {
     for (j = 0; j <= tess; j++) {
       for (i = 0; i <= tess; i++) {
-      	r.x = -1.0 + i * stepSize;
-      	r.y = 0.0;
-      	r.z = -1.0 + j * stepSize;
+        r.x = -1.0 + i * stepSize;
+        r.y = 0.0;
+        r.z = -1.0 + j * stepSize;
 
-      	n.y = 1.0;
-      	n.x = 0.0;
-      	n.z = 0.0;
-      	rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
-      	nEC = normalMatrix * glm::normalize(n);
-      	drawVector(rEC, nEC, 0.05, true, yellow);
+        n.y = 1.0;
+        n.x = 0.0;
+        n.z = 0.0;
+        rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
+        nEC = normalMatrix * glm::normalize(n);
+        drawVector(rEC, nEC, 0.05, true, yellow);
       }
     }
   }
@@ -432,8 +623,6 @@ void drawGrid(int tess)
   }
 }
 
-
-
 void drawSineWave(int tess)
 {
   const float A1 = 0.25, k1 = 2.0 * M_PI, w1 = 0.25;
@@ -443,10 +632,18 @@ void drawSineWave(int tess)
   int i, j;
   float t = g.t;
 
-  if (g.useShaders)
+  if (g.useShaders) {
     glUseProgram(shaderProgram);
+    glUniform1f(shineLoc, g.shininess);
+    glUniform1i(phongLoc, g.phong);
+    glUniform1i(pixelLoc, g.perPixel);
+    glUniform1f(fragShineLoc, g.shininess);
+    glUniform1i(fragPhongLoc, g.phong);
+    glUniform1i(fragPixelLoc, g.perPixel);
+    glUniform1i(lightingLoc, g.lighting);
+  }
 
-  if (g.lighting && g.fixed) {
+  else if (g.lighting && g.fixed) {
     glEnable(GL_LIGHTING);
     glEnable(GL_LIGHT0);
     glEnable(GL_NORMALIZE);
@@ -454,13 +651,13 @@ void drawSineWave(int tess)
     if (g.twoside)
       glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
     glMaterialfv(GL_FRONT, GL_SPECULAR, &white[0]);
-    glMaterialf(GL_FRONT, GL_SHININESS, shininess);
+    glMaterialf(GL_FRONT, GL_SHININESS, g.shininess);
   } else {
     glDisable(GL_LIGHTING);
     glColor3fv(&cyan[0]);
   }
 
-  if (g.polygonMode == line)
+  if (g.wireframe)
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
   else
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
@@ -473,51 +670,51 @@ void drawSineWave(int tess)
       r.z = -1.0 + j * stepSize;
 
       if (g.waveDim == 2) {
-      	r.y = A1 * sinf(k1 * r.x + w1 * t);
-      	if (g.lighting) {
-      	  n.x = - A1 * k1 * cosf(k1 * r.x + w1 * t);
-      	  n.y = 1.0;
-      	  n.z = 0.0;
-      	}
+        r.y = A1 * sinf(k1 * r.x + w1 * t);
+        if (g.lighting) {
+          n.x = - A1 * k1 * cosf(k1 * r.x + w1 * t);
+          n.y = 1.0;
+          n.z = 0.0;
+        }
       } else if (g.waveDim == 3) {
-      	r.y = A1 * sinf(k1 * r.x + w1 * t) + A2 * sinf(k2 * r.z + w2 * t);
-      	if (g.lighting) {
-      	  n.x = - A1 * k1 * cosf(k1 * r.x + w1 * t);
-      	  n.y = 1.0;
-      	  n.z = - A2 * k2 * cosf(k2 * r.z + w2 * t);
-      	}
+        r.y = A1 * sinf(k1 * r.x + w1 * t) + A2 * sinf(k2 * r.z + w2 * t);
+        if (g.lighting) {
+          n.x = - A1 * k1 * cosf(k1 * r.x + w1 * t);
+          n.y = 1.0;
+          n.z = - A2 * k2 * cosf(k2 * r.z + w2 * t);
+        }
       }
 
       rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
       if (g.lighting) {
-      	nEC = normalMatrix * glm::normalize(n);
-      	if (g.fixed) {
-      	  glNormal3fv(&nEC[0]);
-      	} else {
-      	  glm::vec3 c = computeLighting(rEC, nEC);
-      	  glColor3fv(&c[0]);
-      	}
+        nEC = normalMatrix * glm::normalize(n);
+        if (g.fixed) {
+          glNormal3fv(&nEC[0]);
+        } else {
+          glm::vec3 c = computeLighting(rEC, nEC);
+          glColor3fv(&c[0]);
+        }
       }
       glVertex3fv(&rEC[0]);
 
       r.z += stepSize;
 
       if (g.waveDim == 3) {
-      	r.y = A1 * sinf(k1 * r.x + w1 * t) + A2 * sinf(k2 * r.z + w2 * t);
-      	if (g.lighting) {
-      	  n.z = - A2 * k2 * cosf(k2 * r.z + w2 * t);
-      	}
+        r.y = A1 * sinf(k1 * r.x + w1 * t) + A2 * sinf(k2 * r.z + w2 * t);
+        if (g.lighting) {
+          n.z = - A2 * k2 * cosf(k2 * r.z + w2 * t);
+        }
       }
 
       rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
       if (g.lighting) {
-      	nEC = normalMatrix * glm::normalize(n);
-      	if (g.fixed) {
-      	  glNormal3fv(&nEC[0]);
-      	} else {
-      	  glm::vec3 c = computeLighting(rEC, nEC);
-      	  glColor3fv(&c[0]);
-      	}
+        nEC = normalMatrix * glm::normalize(n);
+        if (g.fixed) {
+          glNormal3fv(&nEC[0]);
+        } else {
+          glm::vec3 c = computeLighting(rEC, nEC);
+          glColor3fv(&c[0]);
+        }
       }
       glVertex3fv(&rEC[0]);
     }
@@ -533,22 +730,22 @@ void drawSineWave(int tess)
   if (g.drawNormals) {
     for (j = 0; j <= tess; j++) {
       for (i = 0; i <= tess; i++) {
-      	r.x = -1.0 + i * stepSize;
-      	r.z = -1.0 + j * stepSize;
+        r.x = -1.0 + i * stepSize;
+        r.z = -1.0 + j * stepSize;
 
-      	n.y = 1.0;
-      	n.x = - A1 * k1 * cosf(k1 * r.x + w1 * t);
-      	if (g.waveDim == 2) {
-      	  r.y = A1 * sinf(k1 * r.x + w1 * t);
-      	  n.z = 0.0;
-      	} else {
-      	  r.y = A1 * sinf(k1 * r.x + w1 * t) + A2 * sinf(k2 * r.z + w2 * t);
-      	  n.z = - A2 * k2 * cosf(k2 * r.z + w2 * t);
-      	}
+        n.y = 1.0;
+        n.x = - A1 * k1 * cosf(k1 * r.x + w1 * t);
+        if (g.waveDim == 2) {
+          r.y = A1 * sinf(k1 * r.x + w1 * t);
+          n.z = 0.0;
+        } else {
+          r.y = A1 * sinf(k1 * r.x + w1 * t) + A2 * sinf(k2 * r.z + w2 * t);
+          n.z = - A2 * k2 * cosf(k2 * r.z + w2 * t);
+        }
 
-      	rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
-      	nEC = normalMatrix * glm::normalize(n);
-      	drawVector(rEC, nEC, 0.05, true, yellow);
+        rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
+        nEC = normalMatrix * glm::normalize(n);
+        drawVector(rEC, nEC, 0.05, true, yellow);
       }
     }
   }
@@ -558,7 +755,6 @@ void drawSineWave(int tess)
     printf("displaySineWave: %s\n", gluErrorString(err));
   }
 }
-
 
 void idle()
 {
@@ -579,10 +775,10 @@ void idle()
   dt = (t - g.lastStatsDisplayT);
   if (dt > g.displayStatsInterval) {
     g.frameRate = g.frameCount / dt;
-    if (debug[d_OSD])
-      printf("dt %f framecount %d framerate %f\n", dt, g.frameCount, g.frameRate);
     g.lastStatsDisplayT = t;
     g.frameCount = 0;
+    if (g.consolePM)
+      consolePM();
   }
 
   glutPostRedisplay();
@@ -599,7 +795,7 @@ void displayMultiView()
   modelViewMatrix = glm::mat4(1.0);
   glViewport(g.width / 16.0, g.height * 9.0 / 16.0, g.width * 6.0 / 16.0, g.height * 6.0 / 16.0);
   drawAxes(5.0);
-  if (g.shape == grid)
+  if (!g.wave)
     drawGrid(g.tess);
   else
     drawSineWave(g.tess);
@@ -610,7 +806,7 @@ void displayMultiView()
   modelViewMatrix = glm::rotate(modelViewMatrix, glm::pi<float>() / 2.0f, glm::vec3(1.0, 0.0, 0.0));
   glViewport(g.width / 16.0, g.height / 16.0, g.width * 6.0 / 16.0, g.height * 6.0 / 16);
   drawAxes(5.0);
-  if (g.shape == grid)
+  if (!g.wave)
     drawGrid(g.tess);
   else
     drawSineWave(g.tess);
@@ -620,7 +816,7 @@ void displayMultiView()
   modelViewMatrix = glm::rotate(modelViewMatrix, glm::pi<float>() / 2.0f, glm::vec3(0.0, 1.0, 0.0));
   glViewport(g.width * 9.0 / 16.0, g.height * 9.0 / 16.0, g.width * 6.0 / 16.0, g.height * 6.0 / 16.0);
   drawAxes(5.0);
-  if (g.shape == grid)
+  if (!g.wave)
     drawGrid(g.tess);
   else
     drawSineWave(g.tess);
@@ -632,16 +828,13 @@ void displayMultiView()
   normalMatrix = glm::transpose(glm::inverse(glm::mat3(modelViewMatrix)));
   glViewport(g.width * 9.0 / 16.0, g.width / 16.0, g.width * 6.0 / 16.0, g.height * 6.0 / 16.0);
   drawAxes(5.0);
-  if (g.shape == grid)
+  if (!g.wave)
     drawGrid(g.tess);
   else
     drawSineWave(g.tess);
 
   if (g.displayOSD)
     displayOSD();
-
-  if (g.consolePM)
-    consolePM();
 
   g.frameCount++;
 
@@ -675,16 +868,13 @@ void display()
   }
 
   drawAxes(5.0);
-  if (g.shape == grid)
+  if (!g.wave)
     drawGrid(g.tess);
   else
     drawSineWave(g.tess);
 
   if (g.displayOSD)
     displayOSD();
-
-  if (g.consolePM)
-    consolePM();
 
   glutSwapBuffers();
 
@@ -698,86 +888,139 @@ void display()
 
 void keyboard(unsigned char key, int x, int y)
 {
+  const char* osd[] = { "Frame", "Flags", "Flags2" };
+
   switch (key) {
-  case 27:
+  case 27: //quit
     printf("exit\n");
     exit(0);
     break;
-  case 'g':
+  case 'a': //animation
+    if (g.wave) {
+      g.animate = !g.animate;
+      if (g.animate) {
+        g.lastT = glutGet(GLUT_ELAPSED_TIME) / milli;
+      }
+    }
+    printf("animtation: %s\n", g.animate?"true":"false");
+    break;
+  case 'b': //smooth/flat shading
+    g.flat = !g.flat;
+    printf("flat: %s\n", g.flat?"true":"false");
+    glutPostRedisplay();
+    break;
+  case 'c': //console display
+    g.consolePM = !g.consolePM;
+    g.displayOSD = !g.displayOSD;
+    printf("console: %s\n", g.consolePM?"true":"false");
+    glutPostRedisplay();
+    break;
+  case 'd': //directional/positional lighting
+    g.positional = !g.positional;
+    printf("positional: %s\n", g.positional?"true":"false");
+    glutPostRedisplay();
+    break;
+  case 'f': //gpu/cpu lighting
+    g.fixed = !g.fixed;
+    printf("fixed: %s\n", g.fixed?"true":"false");
+    glutPostRedisplay();
+    break;
+  case 'g': //shaders
     g.useShaders = !g.useShaders;
     // if (g.useShaders)
     //   glUseProgram(shaderProgram);
     // else
     //   glUseProgram(0);
+    printf("shaders: %s\n", g.useShaders?"true":"false");
     break;
-  case 'a':
-    g.animate = !g.animate;
-    if (g.animate) {
-      g.lastT = glutGet(GLUT_ELAPSED_TIME) / milli;
-    }
+  case 'H': //increase shininess
+    g.shininess += 10.0;
+    printf("shininess: %f\n", g.shininess);
+    glutPostRedisplay();
     break;
-  case 'l':
+  case 'h': //decrease shininess
+    g.shininess -= 10;
+    if (g.shininess < 0)
+      g.shininess = 0;
+    printf("shininess: %f\n", g.shininess);
+    glutPostRedisplay();
+    break;
+  case 'l': //lighting
     g.lighting = !g.lighting;
+    printf("lighting: %s\n", g.lighting?"true":"false");
     glutPostRedisplay();
     break;
-  case 'f':
-    g.fixed = !g.fixed;
+  case 'm': //specular lighting mode (Blinn-Phong/Phong)
+    g.phong = !g.phong;
+    printf("phong: %s\n", g.phong?"true":"false");
     glutPostRedisplay();
     break;
-  case 'm':
-    printf("%d\n", g.polygonMode);
-    if (g.polygonMode == line)
-      g.polygonMode = fill;
-    else
-      g.polygonMode = line;
-    glutPostRedisplay();
-    break;
-  case 'n':
+  case 'n': //normals
     g.drawNormals = !g.drawNormals;
+    printf("normals: %s\n", g.drawNormals?"true":"false");
     glutPostRedisplay();
     break;
-  case 'c':
-    g.consolePM = !g.consolePM;
+  case 'o': // cycle OSD options (enum)
+    g.option = static_cast<OSD>(g.option+1);
+    if (g.option > VALUES)
+      g.option = FRAME;
+    printf("osd: %s\n", osd[g.option]);
     glutPostRedisplay();
     break;
-  case 'o':
-    g.displayOSD = !g.displayOSD;
+  case 'p': //per (vertex/pixel) lighting
+    g.perPixel = !g.perPixel;
+    printf("per pixel: %s\n", g.perPixel?"true":"flase");
     glutPostRedisplay();
     break;
-  case 's':
-    g.shape = g.shape == grid ? wave : grid;
-    g.animate = false;
+  case 's': //shape change
+    g.wave = !g.wave;
+    if (!g.wave)
+      g.animate = false;
+    printf("wave: %s\n", g.wave?"true":"false");
     break;
-  case '4':
+  case 'v': //VBO mode
+    g.vbo = !g.vbo;
+    printf("vbo: %s\n", g.vbo?"true":"false");
+    glutPostRedisplay();
+    break;
+  case 'w': //wireframe
+    g.wireframe = !g.wireframe;
+    printf("wireframe: %s\n", g.wireframe?"true":"false");
+    glutPostRedisplay();
+    break;
+  case 'z': //2D/3D wave
+    g.waveDim++;
+    if (g.waveDim > 3)
+      g.waveDim = 2;
+    printf("dimention: %d\n", g.waveDim);
+    glutPostRedisplay();
+    break;
+  case '4': //multiview
     g.multiView = !g.multiView;
     if (g.multiView)
       glutDisplayFunc(displayMultiView);
     else
       glutDisplayFunc(display);
+    printf("multiview: %s\n", g.multiView?"true":"false");
     glutPostRedisplay();
     break;
-  case 'v':
-    printf("vbos not implemented\n");
-    break;
-  case '+':
+  case '+': //increase tesselation
     g.tess *= 2;
+    printf("tesselation: %d\n", g.tess);
     glutPostRedisplay();
     break;
-  case '-':
+  case '-': //decrease tesselation
     g.tess /= 2;
     if (g.tess < 8)
       g.tess = 8;
-    glutPostRedisplay();
-    break;
-  case 'z':
-    g.waveDim++;
-    if (g.waveDim > 3)
-      g.waveDim = 2;
+    printf("tesselation: %d\n", g.tess);
     glutPostRedisplay();
     break;
   default:
     break;
   }
+
+  //glutPostRedisplay();
 }
 
 void mouse(int button, int state, int x, int y)
@@ -835,8 +1078,6 @@ void motion(int x, int y)
 
   glutPostRedisplay();
 }
-
-
 
 int main(int argc, char** argv)
 {
