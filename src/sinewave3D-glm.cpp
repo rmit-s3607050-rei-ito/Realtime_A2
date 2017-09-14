@@ -25,8 +25,7 @@
 static int shaderProgram;
 static const char* vertexFile = "./shader.vert";
 static const char* fragmentFile = "./shader.frag";
-static GLint shineLoc, phongLoc, pixelLoc, lightingLoc;
-static GLint fragShineLoc, fragPhongLoc, fragPixelLoc;
+static GLint shineLoc, phongLoc, pixelLoc, positionalLoc, fixedLoc, lightingLoc;
 
 typedef enum {
   d_drawSineWave,
@@ -185,13 +184,15 @@ void init(void)
 
   // Define the shader program using the input files (predefined)
   shaderProgram = getShader(vertexFile, fragmentFile);
-  shineLoc = glGetUniformLocation(shaderProgram, "shininess");
-  phongLoc = glGetUniformLocation(shaderProgram, "phong");
-  pixelLoc = glGetUniformLocation(shaderProgram, "perPixel");
-  fragShineLoc = glGetUniformLocation(shaderProgram, "fragShininess");
-  fragPhongLoc = glGetUniformLocation(shaderProgram, "fragPhong");
-  fragPixelLoc = glGetUniformLocation(shaderProgram, "fragPixel");
-  lightingLoc = glGetUniformLocation(shaderProgram, "lighting");
+
+  // in .vert
+  shineLoc = glGetUniformLocation(shaderProgram, "uShininess");
+  phongLoc = glGetUniformLocation(shaderProgram, "uPhong");
+  pixelLoc = glGetUniformLocation(shaderProgram, "uPixel");
+  positionalLoc = glGetUniformLocation(shaderProgram, "uPositional");
+  fixedLoc = glGetUniformLocation(shaderProgram, "uFixed");
+  // in .frag
+  lightingLoc = glGetUniformLocation(shaderProgram, "uLighting");
 }
 
 void reshape(int w, int h)
@@ -521,12 +522,13 @@ void drawGrid(int tess)
 
   if (g.useShaders) {
     glUseProgram(shaderProgram);
+    // in .vert
     glUniform1f(shineLoc, g.shininess);
     glUniform1i(phongLoc, g.phong);
     glUniform1i(pixelLoc, g.perPixel);
-    glUniform1f(fragShineLoc, g.shininess);
-    glUniform1i(fragPhongLoc, g.phong);
-    glUniform1i(fragPixelLoc, g.perPixel);
+    glUniform1i(positionalLoc, g.positional);
+    glUniform1i(fixedLoc, g.fixed);
+    // in .frag
     glUniform1i(lightingLoc, g.lighting);
   }
 
@@ -634,12 +636,13 @@ void drawSineWave(int tess)
 
   if (g.useShaders) {
     glUseProgram(shaderProgram);
+    // in .vert
     glUniform1f(shineLoc, g.shininess);
     glUniform1i(phongLoc, g.phong);
     glUniform1i(pixelLoc, g.perPixel);
-    glUniform1f(fragShineLoc, g.shininess);
-    glUniform1i(fragPhongLoc, g.phong);
-    glUniform1i(fragPixelLoc, g.perPixel);
+    glUniform1i(positionalLoc, g.positional);
+    glUniform1i(fixedLoc, g.fixed);
+    // in .frag
     glUniform1i(lightingLoc, g.lighting);
   }
 
@@ -647,7 +650,10 @@ void drawSineWave(int tess)
     glEnable(GL_LIGHTING);
     glEnable(GL_LIGHT0);
     glEnable(GL_NORMALIZE);
-    glShadeModel(GL_SMOOTH);
+    if (!g.flat)
+      glShadeModel(GL_SMOOTH);
+    else
+      glShadeModel(GL_FLAT);
     if (g.twoside)
       glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
     glMaterialfv(GL_FRONT, GL_SPECULAR, &white[0]);
@@ -723,6 +729,7 @@ void drawSineWave(int tess)
 
   if(g.useShaders)
     glUseProgram(0);
+
   if (g.lighting)
     glDisable(GL_LIGHTING);
 
@@ -888,7 +895,7 @@ void display()
 
 void keyboard(unsigned char key, int x, int y)
 {
-  const char* osd[] = { "Frame", "Flags", "Flags2" };
+  const char* osd[] = { "FRAME", "FLAGS", "VALUES" };
 
   switch (key) {
   case 27: //quit
@@ -927,22 +934,20 @@ void keyboard(unsigned char key, int x, int y)
     break;
   case 'g': //shaders
     g.useShaders = !g.useShaders;
-    // if (g.useShaders)
-    //   glUseProgram(shaderProgram);
-    // else
-    //   glUseProgram(0);
     printf("shaders: %s\n", g.useShaders?"true":"false");
     break;
   case 'H': //increase shininess
-    g.shininess += 10.0;
-    printf("shininess: %f\n", g.shininess);
+    g.shininess += 5.0;
+    if (g.shininess > 125.0)
+      g.shininess = 125.0;
+    printf("shininess: %.1f\n", g.shininess);
     glutPostRedisplay();
     break;
   case 'h': //decrease shininess
-    g.shininess -= 10;
-    if (g.shininess < 0)
-      g.shininess = 0;
-    printf("shininess: %f\n", g.shininess);
+    g.shininess -= 5.0;
+    if (g.shininess < 5.0)
+      g.shininess = 5.0;
+    printf("shininess: %.1f\n", g.shininess);
     glutPostRedisplay();
     break;
   case 'l': //lighting

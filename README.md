@@ -1,10 +1,31 @@
-# Realtime_A2
+README
+COSC1226 Real-Time Rendering and 3D Games Programming Assignment 2
 
-Students:
+AUTHORS
 Rei Ito - s3607050
 Pacific Thai - s3429648
 
-Questions:
+CONTRIBUTORS
+Shaders built with the help of 'sinewave3D-glm.cpp'.
+'shaders.c' + 'shaders.h', adopted from code written by pknowels, was used to load shaders.
+
+FILES
+Makefile
+shader.frag
+shader.vert
+shaders.c
+shaders.h
+sinewave3D-glm.cpp
+
+INSTALL
+To be run on linux systems:
+make
+./sinewave
+
+BUGS (Incomplete)
+
+
+QUESTIONS & ANSWERS
 Is there any visual difference between fixed pipeline and shader lighting? Should there be?
 
 
