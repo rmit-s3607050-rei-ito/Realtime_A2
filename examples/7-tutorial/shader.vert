@@ -3,7 +3,6 @@
 #define M_PI 3.1415926535897932384626433832795
 
 // uniform = values obtained from sinewave3D-glm.cpp file
-// [VALUES]
 uniform mat3 nMat;          // normalMatrix
 uniform mat4 mvMat;         // modelViewMatrix
 uniform mat4 pMat;          // projectionMatrix
@@ -15,11 +14,10 @@ uniform float time;
 varying vec3 vColor;
 
 vec3 computeLighting(vec4 rEC, vec3 nEC) {
-  float shininess = 50.0;
   // Using computeLighting() from sinewave3D-glm.cpp (modified to work)
+  float shininess = 50.0;
 
   vec3 color = vec3(0.0);
-
   vec3 La = vec3(0.2);
   vec3 Ma = vec3(0.2);
   vec3 ambient = (La * Ma);
@@ -56,12 +54,9 @@ vec3 computeLighting(vec4 rEC, vec3 nEC) {
 
 void main(void)
 {
+  // Calculate y values in here, x and z is calculated in cpu and passed here
   vec4 v = gl_Vertex;
 
-  // CALCULATE Y VALUES IN HERE, X AND Z TO BE CALCULATED IN CPU AND PASSED HERE
-  /* In drawSineWave, stepSize was calculated via dividing float by int, that does
-   * not work in this case, so tess is converted to a float.
-   */
   float tesselation = float(ts);
   float stepSize = 2.0 / tesselation;
 
@@ -72,7 +67,6 @@ void main(void)
 
   vec4 esVert, csVert;
 
-  // Sine wave
   for (j = 0; j < ts; j++){
     for (i = 0; i <= ts; i++){
       if (waveDim == 2) {
@@ -88,12 +82,4 @@ void main(void)
       vColor = computeLighting(esVert, nMat * normalize(gl_Normal));
     }
   }
-
-  //calculateSineWave(waveDim, ts, time);
-
-  //vec4 esVert = mvMat * gl_Vertex;
-  //vec4 csVert = pMat * esVert;
-  //gl_Position = csVert;
-
-  //vColor = computeLighting(esVert, nMat * normalize(gl_Normal));
 }

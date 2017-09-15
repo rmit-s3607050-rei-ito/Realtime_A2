@@ -111,7 +111,6 @@ glm::vec3 yellow(1.0, 1.0, 0.0);
 glm::vec3 white(1.0, 1.0, 1.0);
 glm::vec3 grey(0.8, 0.8, 0.8);
 glm::vec3 black(0.0, 0.0, 0.0);
-glm::vec3 red(1.0, 0.0, 0.0);
 
 const float shininess = 50.0;
 const float milli = 1000.0;
@@ -123,7 +122,6 @@ int err;
 
 /* Shading calculations and variable assignments
  */
-
 void applyShading() {
   // Define projection matrix
   glm::mat4 projectionMatrix = glm::ortho(-1.0, 1.0, -1.0, 1.0, -100.0, 100.0);
@@ -134,30 +132,11 @@ void applyShading() {
   glUniformMatrix3fv(nMatLoc, 1, false, &normalMatrix[0][0]);
   glUniformMatrix4fv(mvMatLoc, 1, false, &modelViewMatrix[0][0]);
   glUniformMatrix4fv(pMatLoc, 1, false, &projectionMatrix[0][0]);
-}
 
-void passValues() {
   glUniform1f(timeLoc, g.t);
   glUniform1i(tessLoc, g.tess);
   glUniform1i(waveDimLoc, g.waveDim);
-
-  // printf("########## PASSING VALUES ##########\n");
-  // printf("Time: %f\n", g.t);
-  // printf("WaveDim: %d\n", g.waveDim);
-  // printf("Tesselation: %d\n", g.tess);
 }
-
-// TODO: COMMENT PROPERLY / RENAME FUNCTION
-// void passValues() {
-//   glUniform1f(timeLoc, g.t);
-//   glUniform1i(tessLoc, g.tess);
-//   glUniform1i(waveDimLoc, g.waveDim);
-//
-//   printf("########## PASSING VALUES ##########\n");
-//   printf("Time: %f\n", g.t);
-//   printf("WaveDim: %d\n", g.waveDim);
-//   printf("Tesselation: %d\n", g.tess);
-// }
 
 void printVec(float *v, int n)
 {
@@ -446,15 +425,14 @@ void unbindVBOs(){
      glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
 
-void initVBOGrid(int tess) {
-  // Calculations mainly obtained from assignment 1 mesh.c createPlaneRowMajor
-  // Assumed from -1 to 1, so both width and height to be 2.0
-  float width = 2.0;
-  float height = 2.0;
+void initVBO(int tess) {
 
+  const float A1 = 0.25, k1 = 2.0 * M_PI, w1 = 0.25;
+  const float A2 = 0.25, k2 = 2.0 * M_PI, w2 = 0.25;
   glm::vec3 r, n, rEC, nEC;
   float x, z;
   float stepSize = 2.0 / tess;
+  float t = g.t;
 
   numVerts = (tess + 1) * (tess + 1);
   numIndices = tess * tess * 6;
@@ -466,8 +444,16 @@ void initVBOGrid(int tess) {
   for (size_t j = 0; j <= tess; ++j) {
     for (size_t i = 0; i <= tess; ++i) {
       r.x = -1.0 + i * stepSize;
-      r.y = 0.0;
       r.z = -1.0 + j * stepSize;
+      r.y = 0.0;
+
+      if (g.shape == wave) {
+        if (g.waveDim == 2) {
+          r.y = A1 * sinf(k1 * r.x + w1 * t);
+        } else if (g.waveDim == 3) {
+          r.y = A1 * sinf(k1 * r.x + w1 * t) + A2 * sinf(k2 * r.z + w2 * t);
+        }
+      }
 
       rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
 
@@ -505,8 +491,21 @@ void initVBOGrid(int tess) {
 
 void resetVBOS(){
   unbindVBOs();
-  initVBOGrid(g.tess);
+  initVBO(g.tess);
   bindVBOs();
+}
+
+void drawVBOShape(){
+  // Enable pointers to vertex and normal coordinate arrays
+  glEnableClientState(GL_VERTEX_ARRAY);
+  glEnableClientState(GL_NORMAL_ARRAY);
+  glEnableClientState(GL_COLOR_ARRAY);
+
+  glVertexPointer(3, GL_FLOAT, sizeof(Vertex), BUFFER_OFFSET(0));
+  glNormalPointer(GL_FLOAT, sizeof(Vertex), BUFFER_OFFSET(sizeof(glm::vec3)));
+  glColorPointer(3, GL_FLOAT, sizeof(Vertex), BUFFER_OFFSET(sizeof(glm::vec3) + sizeof(glm::vec3)));
+
+  glDrawElements(GL_TRIANGLES, numIndices, GL_UNSIGNED_INT, 0);
 }
 
 // NOTE: end VBO related functions
@@ -536,18 +535,8 @@ void drawGrid(int tess)
   else
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
-  if (g.vbo) {
-    // Enable pointers to vertex and normal coordinate arrays
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glEnableClientState(GL_NORMAL_ARRAY);
-    glEnableClientState(GL_COLOR_ARRAY);
-
-    glVertexPointer(3, GL_FLOAT, sizeof(Vertex), BUFFER_OFFSET(0));
-    glNormalPointer(GL_FLOAT, sizeof(Vertex), BUFFER_OFFSET(sizeof(glm::vec3)));
-    glColorPointer(3, GL_FLOAT, sizeof(Vertex), BUFFER_OFFSET(sizeof(glm::vec3) + sizeof(glm::vec3)));
-
-    glDrawElements(GL_TRIANGLES, numIndices, GL_UNSIGNED_INT, 0);
-  }
+  if (g.vbo)
+    drawVBOShape();
   else {
     for (j = 0; j < tess; j++) {
       glBegin(GL_QUAD_STRIP);
@@ -623,6 +612,10 @@ void drawGrid(int tess)
 
 void drawSineWave(int tess)
 {
+  // Refresh vbo when animating
+  if (g.animate && g.vbo)
+    resetVBOS();
+
   const float A1 = 0.25, k1 = 2.0 * M_PI, w1 = 0.25;
   const float A2 = 0.25, k2 = 2.0 * M_PI, w2 = 0.25;
   float stepSize = 2.0 / tess;
@@ -651,8 +644,6 @@ void drawSineWave(int tess)
 
   if (g.useShaders) {
     applyShading();
-    passValues();
-
     for (j = 0; j < tess; j++) {
       glBegin(GL_QUAD_STRIP);
       for (i = 0; i <= tess; i++) {
@@ -661,87 +652,91 @@ void drawSineWave(int tess)
         r.z = -1.0 + j * stepSize;
 
         rEC = glm::vec3(glm::vec4(r, 1.0));
+        if (g.lighting) {
+          nEC = glm::normalize(n);
+          if (g.fixed)
+            glNormal3fv(&nEC[0]);
+        }
         glVertex3fv(&rEC[0]);
 
         r.z += stepSize;
         rEC = glm::vec3(glm::vec4(r, 1.0));
+        if (g.lighting) {
+          nEC = glm::normalize(n);
+          if (g.fixed)
+            glNormal3fv(&nEC[0]);
+        }
         glVertex3fv(&rEC[0]);
       }
       glEnd();
     }
   }
   else {
-    // Sine wave
-    for (j = 0; j < tess; j++) {
-      glBegin(GL_QUAD_STRIP);
-      for (i = 0; i <= tess; i++) {
-        r.x = -1.0 + i * stepSize;
-        r.z = -1.0 + j * stepSize;
+    if (g.vbo)
+      drawVBOShape();
+    else {
+      for (j = 0; j < tess; j++) {
+        glBegin(GL_QUAD_STRIP);
+        for (i = 0; i <= tess; i++) {
+          r.x = -1.0 + i * stepSize;
+          r.z = -1.0 + j * stepSize;
 
-        if (g.waveDim == 2) {
-        	r.y = A1 * sinf(k1 * r.x + w1 * t);
-        	if (g.lighting) {
-        	  n.x = - A1 * k1 * cosf(k1 * r.x + w1 * t);
-        	  n.y = 1.0;
-        	  n.z = 0.0;
-        	}
-        } else if (g.waveDim == 3) {
-        	r.y = A1 * sinf(k1 * r.x + w1 * t) + A2 * sinf(k2 * r.z + w2 * t);
-        	if (g.lighting) {
-        	  n.x = - A1 * k1 * cosf(k1 * r.x + w1 * t);
-        	  n.y = 1.0;
-        	  n.z = - A2 * k2 * cosf(k2 * r.z + w2 * t);
-        	}
-        }
+          if (g.waveDim == 2) {
+          	r.y = A1 * sinf(k1 * r.x + w1 * t);
+          	if (g.lighting) {
+          	  n.x = - A1 * k1 * cosf(k1 * r.x + w1 * t);
+          	  n.y = 1.0;
+          	  n.z = 0.0;
+          	}
+          } else if (g.waveDim == 3) {
+          	r.y = A1 * sinf(k1 * r.x + w1 * t) + A2 * sinf(k2 * r.z + w2 * t);
+          	if (g.lighting) {
+          	  n.x = - A1 * k1 * cosf(k1 * r.x + w1 * t);
+          	  n.y = 1.0;
+          	  n.z = - A2 * k2 * cosf(k2 * r.z + w2 * t);
+          	}
+          }
 
-        if (g.useShaders)
-          rEC = glm::vec3(glm::vec4(r, 1.0));
-        else
           rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
 
-        if (g.lighting) {
-          if (g.useShaders)
-            nEC = glm::normalize(n);
-          else
+          if (g.lighting) {
             nEC = normalMatrix * glm::normalize(n);
-        	if (g.fixed) {
-        	  glNormal3fv(&nEC[0]);
-        	} else {
-        	  glm::vec3 c = computeLighting(rEC, nEC);
-        	  glColor3fv(&c[0]);
-        	}
-        }
-        glVertex3fv(&rEC[0]);
+          	if (g.fixed) {
+          	  glNormal3fv(&nEC[0]);
+          	} else {
+          	  glm::vec3 c = computeLighting(rEC, nEC);
+          	  glColor3fv(&c[0]);
+          	}
+          }
+          glVertex3fv(&rEC[0]);
 
-        r.z += stepSize;
+          r.z += stepSize;
 
-        if (g.waveDim == 3) {
-        	r.y = A1 * sinf(k1 * r.x + w1 * t) + A2 * sinf(k2 * r.z + w2 * t);
-        	if (g.lighting) {
-        	  n.z = - A2 * k2 * cosf(k2 * r.z + w2 * t);
-        	}
-        }
+          if (g.waveDim == 3) {
+          	r.y = A1 * sinf(k1 * r.x + w1 * t) + A2 * sinf(k2 * r.z + w2 * t);
+          	if (g.lighting) {
+          	  n.z = - A2 * k2 * cosf(k2 * r.z + w2 * t);
+          	}
+          }
 
-        if (g.useShaders)
-          rEC = glm::vec3(glm::vec4(r, 1.0));
-        else
           rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
 
-        if (g.lighting) {
-          if (g.useShaders)
-            nEC = glm::normalize(n);
-          else
-            nEC = normalMatrix * glm::normalize(n);
-        	if (g.fixed) {
-        	  glNormal3fv(&nEC[0]);
-        	} else {
-        	  glm::vec3 c = computeLighting(rEC, nEC);
-        	  glColor3fv(&c[0]);
-        	}
+          if (g.lighting) {
+            if (g.useShaders)
+              nEC = glm::normalize(n);
+            else
+              nEC = normalMatrix * glm::normalize(n);
+          	if (g.fixed) {
+          	  glNormal3fv(&nEC[0]);
+          	} else {
+          	  glm::vec3 c = computeLighting(rEC, nEC);
+          	  glColor3fv(&c[0]);
+          	}
+          }
+          glVertex3fv(&rEC[0]);
         }
-        glVertex3fv(&rEC[0]);
+        glEnd();
       }
-      glEnd();
     }
   }
 
@@ -925,6 +920,10 @@ void keyboard(unsigned char key, int x, int y)
     break;
   case 'g':
     g.useShaders = !g.useShaders;
+    if(g.useShaders)
+      printf("SHADERS-ON\n");
+    else
+      printf("SHADERS-OFF\n");
     break;
   case 'a':
     g.animate = !g.animate;
@@ -962,6 +961,8 @@ void keyboard(unsigned char key, int x, int y)
     break;
   case 's':
     g.shape = g.shape == grid ? wave : grid;
+    if(g.vbo)
+      resetVBOS();
     g.animate = false;
     break;
   case '4':
@@ -975,11 +976,14 @@ void keyboard(unsigned char key, int x, int y)
   case 'v':
     g.vbo = !g.vbo;
     if (g.vbo) {
-      initVBOGrid(g.tess);
+      printf("VBO-ON\n");
+      initVBO(g.tess);
       bindVBOs();
     }
-    else
+    else {
+      printf("VBO-OFF\n");
       unbindVBOs();
+    }
     break;
   case '+':
     g.tess *= 2;
@@ -1046,17 +1050,17 @@ void motion(int x, int y)
   camera.lastY = y;
 
   switch (camera.control) {
-  case inactive:
-    break;
-  case rotate:
-    camera.rotateX += dy;
-    camera.rotateY += dx;
-    break;
-  case pan:
-    break;
-  case zoom:
-    camera.scale += dy / 100.0;
-    break;
+    case inactive:
+      break;
+    case rotate:
+      camera.rotateX += dy;
+      camera.rotateY += dx;
+      break;
+    case pan:
+      break;
+    case zoom:
+      camera.scale += dy / 100.0;
+      break;
   }
 
   if(g.vbo)
