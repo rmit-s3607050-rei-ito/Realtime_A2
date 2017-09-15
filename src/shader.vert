@@ -1,9 +1,8 @@
 //shader.vert
 
 uniform float uShininess;
-uniform bool uPhong, uPixel, uPositional, uFixed;
+uniform bool uPhong, uPixel, uPositional, uFixed, uFlat;
 
-varying float vShininess, vPhong, vPositional, vPixel, vFixed;
 varying vec3 vColor, vPosition, vNormal;
 
 vec3 computeVertexLighting(vec3 rEC, vec3 nEC) {
@@ -16,8 +15,10 @@ vec3 computeVertexLighting(vec3 rEC, vec3 nEC) {
   color += ambient; //add ambient to final color
 
   vec3 lEC = vec3 ( 0.0, 0.0, 1.0 ); //light position
-  if (vPositional == 1.0)
-    lEC = lEC - rEC;
+  if (uPositional)
+    lEC = normalize(lEC - rEC);
+  else
+    normalize(lEC);
 
   float dp = dot(nEC, lEC); //dot product between light & scene normals (lambertion)
   if (dp > 0.0) {
@@ -33,9 +34,12 @@ vec3 computeVertexLighting(vec3 rEC, vec3 nEC) {
     vec3 Ms = vec3(1.0); //specular reflection coefficient
 
     vec3 vEC = vec3(0.0, 0.0, 1.0); //viewer direction
-    vEC = normalize(vEC);
+    if (uPositional)
+      vEC = normalize(vEC - rEC);
+    else
+      normalize(vEC);
 
-    if (vPhong == 1.0) { //Phong lighting
+    if (uPhong) { //Phong lighting
       vec3 R = reflect(lEC, nEC);
       R = normalize(-R);
       float VdotR = dot(vEC, R);
@@ -60,12 +64,6 @@ vec3 computeVertexLighting(vec3 rEC, vec3 nEC) {
 
 void main(void)
 {
-  vShininess = uShininess;
-  vPhong = uPhong ? 1.0 : 0.0;
-  vPositional = uPositional ? 1.0 : 0.0;
-  vPixel = uPixel ? 1.0 : 0.0;
-  vFixed = uFixed ? 1.0 : 0.0;
-
   // os - object space, es - eye space, cs - clip space
   vec4 osVert = gl_Vertex;
   vec4 esVert = gl_ModelViewMatrix * osVert;
@@ -76,7 +74,7 @@ void main(void)
   vPosition = vec3(osVert);
   vNormal = gl_Normal;
 
-  if (vFixed == 1.0 && vPixel == 0.0)
+  if (uFixed && !uPixel)
     vColor = computeVertexLighting(vPosition, vNormal);
   else
     vColor = vec3(gl_Color);

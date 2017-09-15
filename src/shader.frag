@@ -1,11 +1,9 @@
 //shader.frag
 
-uniform bool uLighting;
+uniform float uShininess;
+uniform bool uPhong, uPixel, uPositional, uFixed, uLighting;
 
-varying float vShininess, vPhong, vPositional, vPixel, vFixed;
 varying vec3 vColor, vPosition, vNormal;
-
-vec3 fColor;
 
 vec3 computePixelLighting(vec3 rEC, vec3 nEC) {
 
@@ -17,8 +15,10 @@ vec3 computePixelLighting(vec3 rEC, vec3 nEC) {
   color += ambient; //add ambient to final color
 
   vec3 lEC = vec3 ( 0.0, 0.0, 1.0 ); //light position
-  if (vPositional == 1.0)
-    lEC = lEC - rEC;
+  if (uPositional)
+    lEC = normalize(lEC - rEC);
+  else
+    normalize(lEC);
 
   float dp = dot(nEC, lEC); //dot product between light & scene normals (lambertion)
   if (dp > 0.0) {
@@ -34,14 +34,18 @@ vec3 computePixelLighting(vec3 rEC, vec3 nEC) {
     vec3 Ms = vec3(1.0); //specular reflection coefficient
 
     vec3 vEC = vec3(0.0, 0.0, 1.0); //viewer direction
+    if (uPositional)
+      vEC = normalize(vEC - rEC);
+    else
+      normalize(vEC);
 
-    if (vPhong == 1.0) { //Phong lighting
+    if (uPhong) { //Phong lighting
       vec3 R = reflect(lEC, nEC);
       R = normalize(-R);
       float VdotR = dot(vEC, R);
       if (VdotR < 0.0)
         VdotR = 0.0;
-      vec3 specular = (Ls * Ms * pow(VdotR, vShininess)); //calculate specular
+      vec3 specular = (Ls * Ms * pow(VdotR, uShininess)); //calculate specular
       color += specular; //add specular to final color
     }
     else { //Blinn-Phong lighting
@@ -50,7 +54,7 @@ vec3 computePixelLighting(vec3 rEC, vec3 nEC) {
       float NdotH = dot(nEC, H);
       if (NdotH < 0.0)
         NdotH = 0.0;
-      vec3 specular = (Ls * Ms * pow(NdotH, vShininess)); //calculate specular
+      vec3 specular = (Ls * Ms * pow(NdotH, uShininess)); //calculate specular
       color += specular; //add specular to final color
     }
   }
@@ -60,14 +64,14 @@ vec3 computePixelLighting(vec3 rEC, vec3 nEC) {
 
 void main (void)
 {
-  fColor = computePixelLighting(vPosition, vNormal);
+  int pos = uPositional ? 1 : 0;
 
   if (uLighting) {
-    if (vFixed == 1.0 && vPixel == 1.0)
-      gl_FragColor = vec4(fColor, 1);
+    if (uFixed && uPixel)
+      gl_FragColor = vec4(computePixelLighting(vPosition, vNormal), pos);
     else
-      gl_FragColor = vec4(vColor, 1);
+      gl_FragColor = vec4(vColor, pos);
   }
   else
-    gl_FragColor = vec4(vec3(0.0, 1.0, 1.0), 1);
+    gl_FragColor = vec4(vec3(0.0, 1.0, 1.0), pos);
 }

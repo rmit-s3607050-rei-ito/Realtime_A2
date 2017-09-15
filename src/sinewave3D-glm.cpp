@@ -25,7 +25,7 @@
 static int shaderProgram;
 static const char* vertexFile = "./shader.vert";
 static const char* fragmentFile = "./shader.frag";
-static GLint shineLoc, phongLoc, pixelLoc, positionalLoc, fixedLoc, lightingLoc;
+static GLint shineLoc, phongLoc, pixelLoc, positionalLoc, fixedLoc, flatLoc, lightingLoc;
 
 typedef enum {
   d_drawSineWave,
@@ -130,6 +130,7 @@ struct camera_t {
 } camera = { 0, 0, 30.0, -30.0, 1.0, inactive };
 
 glm::vec3 cyan(0.0, 1.0, 1.0);
+glm::vec3 lightCyan(0.0, 1.0, 1.0);
 glm::vec3 magenta(1.0, 0.0, 1.0);
 glm::vec3 yellow(1.0, 1.0, 0.0);
 glm::vec3 white(1.0, 1.0, 1.0);
@@ -185,13 +186,14 @@ void init(void)
   // Define the shader program using the input files (predefined)
   shaderProgram = getShader(vertexFile, fragmentFile);
 
-  // in .vert
+  // .vert uniforms
   shineLoc = glGetUniformLocation(shaderProgram, "uShininess");
   phongLoc = glGetUniformLocation(shaderProgram, "uPhong");
   pixelLoc = glGetUniformLocation(shaderProgram, "uPixel");
   positionalLoc = glGetUniformLocation(shaderProgram, "uPositional");
   fixedLoc = glGetUniformLocation(shaderProgram, "uFixed");
-  // in .frag
+  flatLoc = glGetUniformLocation(shaderProgram, "uFlat");
+  // .frag uniforms
   lightingLoc = glGetUniformLocation(shaderProgram, "uLighting");
 }
 
@@ -522,16 +524,16 @@ void drawGrid(int tess)
 
   if (g.useShaders) {
     glUseProgram(shaderProgram);
-    // in .vert
+    // .vert uniforms
     glUniform1f(shineLoc, g.shininess);
     glUniform1i(phongLoc, g.phong);
     glUniform1i(pixelLoc, g.perPixel);
     glUniform1i(positionalLoc, g.positional);
     glUniform1i(fixedLoc, g.fixed);
-    // in .frag
+    glUniform1i(flatLoc, g.flat);
+    // .frag uniforms
     glUniform1i(lightingLoc, g.lighting);
   }
-
   else if (g.lighting && g.fixed) {
     glEnable(GL_LIGHTING);
     glEnable(GL_LIGHT0);
@@ -636,16 +638,16 @@ void drawSineWave(int tess)
 
   if (g.useShaders) {
     glUseProgram(shaderProgram);
-    // in .vert
+    // .vert uniforms
     glUniform1f(shineLoc, g.shininess);
     glUniform1i(phongLoc, g.phong);
     glUniform1i(pixelLoc, g.perPixel);
     glUniform1i(positionalLoc, g.positional);
     glUniform1i(fixedLoc, g.fixed);
-    // in .frag
+    glUniform1i(flatLoc, g.flat);
+    // .frag uniforms
     glUniform1i(lightingLoc, g.lighting);
   }
-
   else if (g.lighting && g.fixed) {
     glEnable(GL_LIGHTING);
     glEnable(GL_LIGHT0);
@@ -656,7 +658,8 @@ void drawSineWave(int tess)
       glShadeModel(GL_FLAT);
     if (g.twoside)
       glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
-    glMaterialfv(GL_FRONT, GL_SPECULAR, &white[0]);
+    glMaterialfv(GL_FRONT, GL_DIFFUSE, &lightCyan[0]);
+    glMaterialfv(GL_FRONT, GL_SPECULAR, &grey[0]);
     glMaterialf(GL_FRONT, GL_SHININESS, g.shininess);
   } else {
     glDisable(GL_LIGHTING);
