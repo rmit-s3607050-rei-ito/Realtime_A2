@@ -620,7 +620,7 @@ void unbindVBOs()
 void initWaveVBO(int tess) {
   const float A1 = 0.25, k1 = 2.0 * M_PI, w1 = 0.25;
   const float A2 = 0.25, k2 = 2.0 * M_PI, w2 = 0.25;
-  glm::vec3 r, n, rEC, nEC;
+  glm::vec3 r, n, rEC, nEC, lrEC, lnEC;
   float x, z;
   float stepSize = 2.0 / tess;
   float t = g.t;
@@ -672,6 +672,42 @@ void initWaveVBO(int tess) {
           vertices[index].color = colors;
         }
       }
+
+      if (g.waveDim == 3) {
+        if (g.useShaders)
+          r.y = 0.0;
+        else {
+          r.y = A1 * sinf(k1 * r.x + w1 * t) + A2 * sinf(k2 * r.z + w2 * t);
+          if (g.lighting) {
+            n.z = - A2 * k2 * cosf(k2 * r.z + w2 * t);
+          }
+        }
+      }
+      if (g.useShaders) {
+        rEC = glm::vec3(glm::vec4(r, 1.0));
+        lrEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
+      } else
+        rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
+      if (g.lighting) {
+        if (g.useShaders) {
+          nEC = glm::normalize(n);
+          lnEC = normalMatrix * glm::normalize(n);
+        }
+        else
+          nEC = normalMatrix * glm::normalize(n);
+        if (g.fixed && !g.useShaders) {
+          vertices[index].normal = nEC;
+        } else {
+          glm::vec3 c;
+          if (g.useShaders)
+            c = computeLighting(lrEC, lnEC);
+          else
+            c = computeLighting(rEC, nEC);
+
+          vertices[index].color = c;
+        }
+      }
+      vertices[index].pos = rEC;
     }
   }
 
