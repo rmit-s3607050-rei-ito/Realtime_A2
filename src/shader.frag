@@ -16,11 +16,9 @@ vec3 computePixelLighting(vec3 rEC, vec3 nEC)
   vec3 ambient = (La * Ma); //calculate ambient
   color += ambient; //add ambient to final color
 
-  vec3 lEC = vec3 ( 0.0, 0.0, 1.0 ); //light position
+  vec3 lEC = vec3 ( 0.5, 0.5, 0.5 ); //light position
   if (uPositional)
-    lEC = normalize(lEC - rEC);
-  else
-    normalize(lEC);
+    lEC = lEC - rEC;
 
   float dp = dot(nEC, lEC); //dot product between light & scene normals (lambertion)
   if (dp > 0.0) {
@@ -32,14 +30,12 @@ vec3 computePixelLighting(vec3 rEC, vec3 nEC)
     vec3 diffuse = (Ld * Md * NdotL); //calculate diffuse
     color += diffuse; //add diffuse to final color
 
-    vec3 Ls = vec3(0.8, 0.8, 0.8); //intensity of the (point) light source
+    vec3 Ls = vec3(0.8); //intensity of the (point) light source
     vec3 Ms = vec3(1.0); //specular reflection coefficient
 
     vec3 vEC = vec3(0.0, 0.0, 1.0); //viewer direction
     if (uPositional)
-      vEC = normalize(vEC - rEC);
-    else
-      normalize(vEC);
+      vEC = vEC - rEC;
 
     if (uPhong) { //Phong lighting
       vec3 R = reflect(lEC, nEC);

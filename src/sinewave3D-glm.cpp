@@ -148,12 +148,13 @@ struct camera_t {
 } camera = { 0, 0, 30.0, -30.0, 1.0, inactive };
 
 glm::vec3 cyan(0.0, 1.0, 1.0);
-glm::vec3 lightCyan(0.0, 1.0, 1.0);
+glm::vec3 cyanDiffuse(0.0, 0.5, 0.5);
 glm::vec3 magenta(1.0, 0.0, 1.0);
 glm::vec3 yellow(1.0, 1.0, 0.0);
 glm::vec3 white(1.0, 1.0, 1.0);
 glm::vec3 grey(0.8, 0.8, 0.8);
 glm::vec3 black(0.0, 0.0, 0.0);
+GLfloat lightPosition[] = { 0.5, 0.5, 0.5, 0.0 };
 
 const float milli = 1000.0;
 
@@ -574,7 +575,6 @@ glm::vec3 computeLighting(glm::vec3 & rEC, glm::vec3 & nEC)
   return color;
 }
 
-// NOTE: start VBO related functions
 void bindVBOs()
 {
   // Generate buffers for verticies, indices and colors
@@ -615,114 +615,6 @@ void unbindVBOs()
   glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &buffer);
   if (buffer != 0)
      glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-}
-
-void initWaveVBO(int tess) {
-  const float A1 = 0.25, k1 = 2.0 * M_PI, w1 = 0.25;
-  const float A2 = 0.25, k2 = 2.0 * M_PI, w2 = 0.25;
-  glm::vec3 r, n, rEC, nEC, lrEC, lnEC;
-  float x, z;
-  float stepSize = 2.0 / tess;
-  float t = g.t;
-
-  numVerts = (tess + 1) * (tess + 1);
-  numIndices = tess * tess * 6;
-  vertices = (Vertex*) calloc(numVerts, sizeof(Vertex));
-  indices = (unsigned int*) calloc(numIndices, sizeof(int));
-
-  // Store vertices
-  for (size_t j = 0; j <= tess; ++j) {
-    for (size_t i = 0; i <= tess; ++i) {
-      r.x = -1.0 + i * stepSize;
-      r.z = -1.0 + j * stepSize;
-
-      if(g.waveDim == 2) {
-        if(g.useShaders)
-          r.y = 0.0;
-        else
-          r.y = A1 * sinf(k1 * r.x + w1 * t);
-        if (g.lighting) {
-          n.x = - A1 * k1 * cosf(k1 * r.x + w1 * t);
-          n.y = 1.0;
-          n.z = 0.0;
-        }
-      } else if (g.waveDim == 3) {
-        if (g.useShaders)
-          r.y = 0.0;
-        else
-          r.y = A1 * sinf(k1 * r.x + w1 * t) + A2 * sinf(k2 * r.z + w2 * t);
-        if(g.lighting) {
-          n.x = - A1 * k1 * cosf(k1 * r.x + w1 * t);
-          n.y = 1.0;
-          n.z = - A2 * k2 * cosf(k2 * r.z + w2 * t);
-        }
-      }
-
-      size_t index = j * (tess + 1) + i;
-      rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
-      vertices[index].pos = rEC;
-
-      if (g.lighting) {
-        n = glm::vec3(0.0, 1.0, 0.0);
-        nEC = normalMatrix * glm::normalize(n);
-        if (g.fixed) {
-          vertices[index].normal = nEC;
-        } else {
-          glm::vec3 colors = computeLighting(rEC, nEC);
-          vertices[index].color = colors;
-        }
-      }
-
-      if (g.waveDim == 3) {
-        if (g.useShaders)
-          r.y = 0.0;
-        else {
-          r.y = A1 * sinf(k1 * r.x + w1 * t) + A2 * sinf(k2 * r.z + w2 * t);
-          if (g.lighting) {
-            n.z = - A2 * k2 * cosf(k2 * r.z + w2 * t);
-          }
-        }
-      }
-      if (g.useShaders) {
-        rEC = glm::vec3(glm::vec4(r, 1.0));
-        lrEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
-      } else
-        rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
-      if (g.lighting) {
-        if (g.useShaders) {
-          nEC = glm::normalize(n);
-          lnEC = normalMatrix * glm::normalize(n);
-        }
-        else
-          nEC = normalMatrix * glm::normalize(n);
-        if (g.fixed && !g.useShaders) {
-          vertices[index].normal = nEC;
-        } else {
-          glm::vec3 c;
-          if (g.useShaders)
-            c = computeLighting(lrEC, lnEC);
-          else
-            c = computeLighting(rEC, nEC);
-
-          vertices[index].color = c;
-        }
-      }
-      vertices[index].pos = rEC;
-    }
-  }
-
-  // Store indices
-  size_t index = 0;
-  for (size_t i = 0; i < tess ; ++i) {
-    for (size_t j = 0; j < tess; ++j) {
-      indices[index++] = i * (tess + 1) + j;
-      indices[index++] = (i + 1) * (tess + 1) + j;
-      indices[index++] = i * (tess + 1) + j + 1;
-      indices[index++] = i * (tess + 1) + j + 1;
-      indices[index++] = (i + 1) * (tess + 1) + j;
-      indices[index++] = (i + 1) * (tess + 1) + j + 1;
-    }
-  }
 }
 
 void initGridVBO(int tess)
@@ -778,7 +670,127 @@ void initGridVBO(int tess)
   }
 }
 
-void initVBO() {
+void initWaveVBO(int tess)
+{
+  const float A1 = 0.25, k1 = 2.0 * M_PI, w1 = 0.25;
+  const float A2 = 0.25, k2 = 2.0 * M_PI, w2 = 0.25;
+  glm::vec3 r, n, rEC, nEC, lrEC, lnEC;
+  float x, z;
+  float stepSize = 2.0 / tess;
+  float t = g.t;
+
+  numVerts = (tess + 1) * (tess + 1);
+  numIndices = tess * tess * 6;
+  vertices = (Vertex*) calloc(numVerts, sizeof(Vertex));
+  indices = (unsigned int*) calloc(numIndices, sizeof(int));
+
+  // Store vertices
+  for (size_t j = 0; j <= tess; ++j) {
+    for (size_t i = 0; i <= tess; ++i) {
+      r.x = -1.0 + i * stepSize;
+      r.z = -1.0 + j * stepSize;
+
+      if(g.waveDim == 2) {
+        if (g.useShaders && g.fixed)
+          r.y = 0.0;
+        else {
+          r.y = A1 * sinf(k1 * r.x + w1 * t);
+          if (g.lighting) {
+            n.x = - A1 * k1 * cosf(k1 * r.x + w1 * t);
+            n.y = 1.0;
+            n.z = 0.0;
+          }
+        }
+      } else if (g.waveDim == 3) {
+        if (g.useShaders && g.fixed)
+          r.y = 0.0;
+        else {
+          r.y = A1 * sinf(k1 * r.x + w1 * t) + A2 * sinf(k2 * r.z + w2 * t);
+          if (g.lighting) {
+            n.x = - A1 * k1 * cosf(k1 * r.x + w1 * t);
+            n.y = 1.0;
+            n.z = - A2 * k2 * cosf(k2 * r.z + w2 * t);
+          }
+        }
+      }
+
+      size_t index = j * (tess + 1) + i;
+
+      if (g.useShaders && g.fixed) {
+        rEC = glm::vec3(glm::vec4(r, 1.0));
+        if (g.lighting) {
+          nEC = glm::normalize(n);
+          vertices[index].normal = nEC;
+        }
+      }
+      else {
+        rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
+        if (g.lighting) {
+          nEC = normalMatrix * glm::normalize(n);
+          if (g.fixed)
+            vertices[index].normal = nEC;
+          else {
+            if (g.useShaders)
+              rEC = glm::vec3(glm::vec4(r, 1.0));
+            glm::vec3 c = computeLighting(rEC, nEC);
+            vertices[index].color = c;
+          }
+        }
+      }
+      vertices[index].pos = rEC;
+
+      if (g.waveDim == 3) {
+        if (g.useShaders && g.fixed)
+          r.y = 0.0;
+        else {
+          r.y = A1 * sinf(k1 * r.x + w1 * t) + A2 * sinf(k2 * r.z + w2 * t);
+          if (g.lighting) {
+            n.z = - A2 * k2 * cosf(k2 * r.z + w2 * t);
+          }
+        }
+      }
+
+      if (g.useShaders && g.fixed) {
+        rEC = glm::vec3(glm::vec4(r, 1.0));
+        if (g.lighting) {
+          nEC = glm::normalize(n);
+          vertices[index].normal = nEC;
+        }
+      }
+      else {
+        rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
+        if (g.lighting) {
+          nEC = normalMatrix * glm::normalize(n);
+          if (g.fixed)
+            vertices[index].normal = nEC;
+          else {
+            if (g.useShaders)
+              rEC = glm::vec3(glm::vec4(r, 1.0));
+            glm::vec3 c = computeLighting(rEC, nEC);
+            vertices[index].color = c;
+          }
+        }
+      }
+      vertices[index].pos = rEC;
+    }
+  }
+
+  // Store indices
+  size_t index = 0;
+  for (size_t i = 0; i < tess ; ++i) {
+    for (size_t j = 0; j < tess; ++j) {
+      indices[index++] = i * (tess + 1) + j;
+      indices[index++] = (i + 1) * (tess + 1) + j;
+      indices[index++] = i * (tess + 1) + j + 1;
+      indices[index++] = i * (tess + 1) + j + 1;
+      indices[index++] = (i + 1) * (tess + 1) + j;
+      indices[index++] = (i + 1) * (tess + 1) + j + 1;
+    }
+  }
+}
+
+void initVBO()
+{
   if(g.wave)
     initWaveVBO(g.tess);
   else
@@ -800,7 +812,6 @@ void drawVBOShape()
 
   glDrawElements(GL_TRIANGLES, numIndices, GL_UNSIGNED_INT, 0);
 }
-// NOTE: end VBO related functions
 
 void drawGrid(int tess)
 {
@@ -815,7 +826,8 @@ void drawGrid(int tess)
     glShadeModel(GL_SMOOTH);
     if (g.twoside)
       glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
-    glMaterialfv(GL_FRONT, GL_SPECULAR, &white[0]);
+    glMaterialfv(GL_FRONT, GL_DIFFUSE, &cyanDiffuse[0]);
+    glMaterialfv(GL_FRONT, GL_SPECULAR, &grey[0]);
     glMaterialf(GL_FRONT, GL_SHININESS, g.shininess);
   } else {
     glDisable(GL_LIGHTING);
@@ -922,13 +934,18 @@ void drawSineWave(int tess)
     applyShading();
   }
   else if (g.lighting && g.fixed) {
+    glLightfv(GL_LIGHT0, GL_POSITION, lightPosition);
     glEnable(GL_LIGHTING);
     glEnable(GL_LIGHT0);
     glEnable(GL_NORMALIZE);
-    glShadeModel(GL_SMOOTH);
+    if (g.flat)
+      glShadeModel(GL_FLAT);
+    else
+      glShadeModel(GL_SMOOTH);
     if (g.twoside)
       glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
-    glMaterialfv(GL_FRONT, GL_SPECULAR, &white[0]);
+    glMaterialfv(GL_FRONT, GL_DIFFUSE, &cyanDiffuse[0]);
+    glMaterialfv(GL_FRONT, GL_SPECULAR, &grey[0]);
     glMaterialf(GL_FRONT, GL_SHININESS, g.shininess);
   } else {
     glDisable(GL_LIGHTING);
@@ -951,7 +968,7 @@ void drawSineWave(int tess)
         r.z = -1.0 + j * stepSize;
 
         if (g.waveDim == 2) {
-          if (g.useShaders)
+          if (g.useShaders && g.fixed)
             r.y = 0.0;
           else {
             r.y = A1 * sinf(k1 * r.x + w1 * t);
@@ -962,7 +979,7 @@ void drawSineWave(int tess)
             }
           }
         } else if (g.waveDim == 3) {
-          if (g.useShaders)
+          if (g.useShaders && g.fixed)
             r.y = 0.0;
           else {
             r.y = A1 * sinf(k1 * r.x + w1 * t) + A2 * sinf(k2 * r.z + w2 * t);
@@ -974,28 +991,25 @@ void drawSineWave(int tess)
           }
         }
 
-        if (g.useShaders) {
+        if (g.useShaders && g.fixed) {
           rEC = glm::vec3(glm::vec4(r, 1.0));
-          lrEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
-        }
-        else
-          rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
-        if (g.lighting) {
-          if (g.useShaders) {
+          if (g.lighting) {
             nEC = glm::normalize(n);
-            lnEC = normalMatrix * glm::normalize(n);
-          }
-          else
-            nEC = normalMatrix * glm::normalize(n);
-          if (g.fixed)
             glNormal3fv(&nEC[0]);
-          else {
-            glm::vec3 c;
-            if (g.useShaders)
-              c = computeLighting(lrEC, lnEC);
-            else
-              c = computeLighting(rEC, nEC);
-            glColor3fv(&c[0]);
+          }
+        }
+        else {
+          rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
+          if (g.lighting) {
+            nEC = normalMatrix * glm::normalize(n);
+            if (g.fixed)
+              glNormal3fv(&nEC[0]);
+            else {
+              if (g.useShaders)
+                rEC = glm::vec3(glm::vec4(r, 1.0));
+              glm::vec3 c = computeLighting(rEC, nEC);
+              glColor3fv(&c[0]);
+            }
           }
         }
         glVertex3fv(&rEC[0]);
@@ -1003,7 +1017,7 @@ void drawSineWave(int tess)
         r.z += stepSize;
 
         if (g.waveDim == 3) {
-          if (g.useShaders)
+          if (g.useShaders && g.fixed)
             r.y = 0.0;
           else {
             r.y = A1 * sinf(k1 * r.x + w1 * t) + A2 * sinf(k2 * r.z + w2 * t);
@@ -1013,28 +1027,25 @@ void drawSineWave(int tess)
           }
         }
 
-        if (g.useShaders) {
+        if (g.useShaders && g.fixed) {
           rEC = glm::vec3(glm::vec4(r, 1.0));
-          lrEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
-        }
-        else
-          rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
-        if (g.lighting) {
-          if (g.useShaders) {
+          if (g.lighting) {
             nEC = glm::normalize(n);
-            lnEC = normalMatrix * glm::normalize(n);
-          }
-          else
-            nEC = normalMatrix * glm::normalize(n);
-          if (g.fixed)
             glNormal3fv(&nEC[0]);
-          else {
-            glm::vec3 c;
-            if (g.useShaders)
-              c = computeLighting(lrEC, lnEC);
-            else
-              c = computeLighting(rEC, nEC);
-            glColor3fv(&c[0]);
+          }
+        }
+        else {
+          rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
+          if (g.lighting) {
+            nEC = normalMatrix * glm::normalize(n);
+            if (g.fixed)
+              glNormal3fv(&nEC[0]);
+            else {
+              if (g.useShaders)
+                rEC = glm::vec3(glm::vec4(r, 1.0));
+              glm::vec3 c = computeLighting(rEC, nEC);
+              glColor3fv(&c[0]);
+            }
           }
         }
         glVertex3fv(&rEC[0]);
