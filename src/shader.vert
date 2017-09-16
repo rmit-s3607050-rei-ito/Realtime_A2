@@ -1,11 +1,17 @@
 //shader.vert
 
-uniform float uShininess;
+#define M_PI 3.1415926535897932384626433832795
+
+uniform int uTesselation, uDimention;
+uniform float uShininess, uTime;
 uniform bool uPhong, uPixel, uPositional, uFixed, uFlat;
+uniform mat3 uNormalMat;
+uniform mat4 uModelViewMat, uProjectionMat;
 
 varying vec3 vColor, vPosition, vNormal;
 
-vec3 computeVertexLighting(vec3 rEC, vec3 nEC) {
+vec3 computeVertexLighting(vec3 rEC, vec3 nEC)
+{
 
   vec3 color = vec3(0.0); //final return color to be used
 
@@ -22,7 +28,7 @@ vec3 computeVertexLighting(vec3 rEC, vec3 nEC) {
 
   float dp = dot(nEC, lEC); //dot product between light & scene normals (lambertion)
   if (dp > 0.0) {
-    vec3 Ld = vec3(1.0); //intensity of the (point) light source
+    vec3 Ld = vec3(0.0, 0.5, 0.5); //intensity of the (point) light source
     vec3 Md = vec3(0.8); //diffuse reflection coefficient
 
     nEC = normalize(nEC); //normalize scene normals
@@ -30,7 +36,7 @@ vec3 computeVertexLighting(vec3 rEC, vec3 nEC) {
     vec3 diffuse = (Ld * Md * NdotL); //calculate diffuse
     color += diffuse; //add diffuse to final color
 
-    vec3 Ls = vec3(1.0); //intensity of the (point) light source
+    vec3 Ls = vec3(0.8); //intensity of the (point) light source
     vec3 Ms = vec3(1.0); //specular reflection coefficient
 
     vec3 vEC = vec3(0.0, 0.0, 1.0); //viewer direction
@@ -64,18 +70,33 @@ vec3 computeVertexLighting(vec3 rEC, vec3 nEC) {
 
 void main(void)
 {
-  // os - object space, es - eye space, cs - clip space
   vec4 osVert = gl_Vertex;
-  vec4 esVert = gl_ModelViewMatrix * osVert;
-  vec4 csVert = gl_ProjectionMatrix * esVert;
-  gl_Position = csVert;
-  // Equivalent to: gl_Position = gl_ProjectionMatrix * gl_ModelViewMatrix * gl_Vertex
+  float stepSize = 2.0 / float(uTesselation);
 
-  vPosition = vec3(osVert);
-  vNormal = gl_Normal;
+  const float A1 = 0.25, k1 = 2.0 * M_PI, w1 = 0.25;
+  const float A2 = 0.25, k2 = 2.0 * M_PI, w2 = 0.25;
+  vec4 esVert, csVert;
 
-  if (uFixed && !uPixel)
-    vColor = computeVertexLighting(vPosition, vNormal);
-  else
-    vColor = vec3(gl_Color);
+  int i, j;
+  for (i = 0; i < uTesselation; i++) {
+    for (j = 0; j <= uTesselation; j++) {
+      if (uDimention == 2) {
+        osVert.y = A1 * sin(k1 * osVert.x + w1 * uTime);
+      } else if (uDimention == 3) {
+        osVert.y = A1 * sin(k1 * osVert.x + w1 * uTime) + A2 * sin(k2 * osVert.z + w2 * uTime);
+      }
+
+      esVert = uModelViewMat * osVert;
+      csVert = uProjectionMat * esVert;
+      gl_Position = csVert;
+
+      vPosition = vec3(esVert);
+      vNormal = gl_Normal;
+
+      if (uFixed && !uPixel)
+        vColor = computeVertexLighting(vPosition, uNormalMat * normalize(vNormal));
+      else
+        vColor = vec3(gl_Color);
+    }
+  }
 }

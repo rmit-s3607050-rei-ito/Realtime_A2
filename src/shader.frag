@@ -5,7 +5,8 @@ uniform bool uPhong, uPixel, uPositional, uFixed, uLighting;
 
 varying vec3 vColor, vPosition, vNormal;
 
-vec3 computePixelLighting(vec3 rEC, vec3 nEC) {
+vec3 computePixelLighting(vec3 rEC, vec3 nEC)
+{
 
   vec3 color = vec3(0.0); //final return color to be used
 
@@ -22,7 +23,7 @@ vec3 computePixelLighting(vec3 rEC, vec3 nEC) {
 
   float dp = dot(nEC, lEC); //dot product between light & scene normals (lambertion)
   if (dp > 0.0) {
-    vec3 Ld = vec3(1.0); //intensity of the (point) light source
+    vec3 Ld = vec3(0.0, 0.5, 0.5); //intensity of the (point) light source
     vec3 Md = vec3(0.8); //diffuse reflection coefficient
 
     nEC = normalize(nEC); //normalize scene normals
@@ -30,7 +31,7 @@ vec3 computePixelLighting(vec3 rEC, vec3 nEC) {
     vec3 diffuse = (Ld * Md * NdotL); //calculate diffuse
     color += diffuse; //add diffuse to final color
 
-    vec3 Ls = vec3(1.0); //intensity of the (point) light source
+    vec3 Ls = vec3(0.8, 0.8, 0.8); //intensity of the (point) light source
     vec3 Ms = vec3(1.0); //specular reflection coefficient
 
     vec3 vEC = vec3(0.0, 0.0, 1.0); //viewer direction
@@ -73,5 +74,5 @@ void main (void)
       gl_FragColor = vec4(vColor, pos);
   }
   else
-    gl_FragColor = vec4(vec3(0.0, 1.0, 1.0), pos);
+    gl_FragColor = vec4(vec3(1.0, 0.0, 0.0), pos);
 }
