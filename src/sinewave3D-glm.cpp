@@ -824,22 +824,21 @@ void drawSineWave(int tess)
   const float A1 = 0.25, k1 = 2.0 * M_PI, w1 = 0.25;
   const float A2 = 0.25, k2 = 2.0 * M_PI, w2 = 0.25;
   float stepSize = 2.0 / tess;
-  glm::vec3 r, n, rEC, nEC;
+  glm::vec3 r, n, rEC, nEC, lrEC, lnEC;
   int i, j;
   float t = g.t;
 
-  if (g.lighting && g.fixed) {
+  if (g.useShaders) {
+    applyShading();
+  }
+  else if (g.lighting && g.fixed) {
     glEnable(GL_LIGHTING);
     glEnable(GL_LIGHT0);
     glEnable(GL_NORMALIZE);
-    if (!g.flat)
-      glShadeModel(GL_SMOOTH);
-    else
-      glShadeModel(GL_FLAT);
+    glShadeModel(GL_SMOOTH);
     if (g.twoside)
       glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
-    glMaterialfv(GL_FRONT, GL_DIFFUSE, &lightCyan[0]);
-    glMaterialfv(GL_FRONT, GL_SPECULAR, &grey[0]);
+    glMaterialfv(GL_FRONT, GL_SPECULAR, &white[0]);
     glMaterialf(GL_FRONT, GL_SHININESS, g.shininess);
   } else {
     glDisable(GL_LIGHTING);
@@ -851,117 +850,108 @@ void drawSineWave(int tess)
   else
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
-  if (g.useShaders) {
-    applyShading();
-
-    if (g.vbo)
-      drawVBOShape();
-    else {
-      for (j = 0; j < tess; j++) {
-        glBegin(GL_QUAD_STRIP);
-        for (i = 0; i <= tess; i++) {
-          r.x = -1.0 + i * stepSize;
-          r.y = 0.0;
-          r.z = -1.0 + j * stepSize;
-
-          rEC = glm::vec3(glm::vec4(r, 1.0));
-          if (g.lighting) {
-            nEC = normalMatrix * glm::normalize(n);
-            if (g.fixed)
-              glNormal3fv(&nEC[0]);
-            else {
-              glm::vec3 c = computeLighting(rEC, nEC);
-              glColor3fv(&c[0]);
-            }
-          }
-          glVertex3fv(&rEC[0]);
-
-          r.z += stepSize;
-          rEC = glm::vec3(glm::vec4(r, 1.0));
-          if (g.lighting) {
-            nEC = normalMatrix * glm::normalize(n);
-            if (g.fixed)
-              glNormal3fv(&nEC[0]);
-            else {
-              glm::vec3 c = computeLighting(rEC, nEC);
-              glColor3fv(&c[0]);
-            }
-          }
-          glVertex3fv(&rEC[0]);
-        }
-        glEnd();
-      }
-    }
-  }
+  // Sine wave
+  if (g.vbo)
+    drawVBOShape();
   else {
-    if (g.vbo)
-      drawVBOShape();
-    else {
-      for (j = 0; j < tess; j++) {
-        glBegin(GL_QUAD_STRIP);
-        for (i = 0; i <= tess; i++) {
-          r.x = -1.0 + i * stepSize;
-          r.z = -1.0 + j * stepSize;
+    for (j = 0; j < tess; j++) {
+      glBegin(GL_QUAD_STRIP);
+      for (i = 0; i <= tess; i++) {
+        r.x = -1.0 + i * stepSize;
+        r.z = -1.0 + j * stepSize;
 
-          if (g.waveDim == 2) {
+        if (g.waveDim == 2) {
+          if (g.useShaders)
+            r.y = 0.0;
+          else
             r.y = A1 * sinf(k1 * r.x + w1 * t);
-            if (g.lighting) {
-              n.x = - A1 * k1 * cosf(k1 * r.x + w1 * t);
-              n.y = 1.0;
-              n.z = 0.0;
-            }
-          } else if (g.waveDim == 3) {
-            r.y = A1 * sinf(k1 * r.x + w1 * t) + A2 * sinf(k2 * r.z + w2 * t);
-            if (g.lighting) {
-              n.x = - A1 * k1 * cosf(k1 * r.x + w1 * t);
-              n.y = 1.0;
-              n.z = - A2 * k2 * cosf(k2 * r.z + w2 * t);
-            }
-          }
-
-          rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
-
           if (g.lighting) {
-            nEC = normalMatrix * glm::normalize(n);
-            if (g.fixed) {
-              glNormal3fv(&nEC[0]);
-            } else {
-              glm::vec3 c = computeLighting(rEC, nEC);
-              glColor3fv(&c[0]);
-            }
+            n.x = - A1 * k1 * cosf(k1 * r.x + w1 * t);
+            n.y = 1.0;
+            n.z = 0.0;
           }
-          glVertex3fv(&rEC[0]);
-
-          r.z += stepSize;
-
-          if (g.waveDim == 3) {
+        } else if (g.waveDim == 3) {
+          if (g.useShaders)
+            r.y = 0.0;
+          else
             r.y = A1 * sinf(k1 * r.x + w1 * t) + A2 * sinf(k2 * r.z + w2 * t);
-            if (g.lighting) {
-              n.z = - A2 * k2 * cosf(k2 * r.z + w2 * t);
-            }
-          }
-
-          rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
-
           if (g.lighting) {
-            nEC = normalMatrix * glm::normalize(n);
-            if (g.fixed) {
-              glNormal3fv(&nEC[0]);
-            } else {
-              glm::vec3 c = computeLighting(rEC, nEC);
-              glColor3fv(&c[0]);
-            }
+            n.x = - A1 * k1 * cosf(k1 * r.x + w1 * t);
+            n.y = 1.0;
+            n.z = - A2 * k2 * cosf(k2 * r.z + w2 * t);
           }
-          glVertex3fv(&rEC[0]);
         }
-        glEnd();
+
+        if (g.useShaders) {
+          rEC = glm::vec3(glm::vec4(r, 1.0));
+          lrEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
+        }
+        else
+          rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
+        if (g.lighting) {
+          if (g.useShaders) {
+            nEC = glm::normalize(n);
+            lnEC = normalMatrix * glm::normalize(n);
+          }
+          else
+            nEC = normalMatrix * glm::normalize(n);
+          if (g.fixed)
+            glNormal3fv(&nEC[0]);
+          else {
+            glm::vec3 c;
+            if (g.useShaders)
+              c = computeLighting(lrEC, lnEC);
+            else
+              c = computeLighting(rEC, nEC);
+            glColor3fv(&c[0]);
+          }
+        }
+        glVertex3fv(&rEC[0]);
+
+        r.z += stepSize;
+
+        if (g.waveDim == 3) {
+          if (g.useShaders)
+            r.y = 0.0;
+          else
+            r.y = A1 * sinf(k1 * r.x + w1 * t) + A2 * sinf(k2 * r.z + w2 * t);
+          if (g.lighting) {
+            n.z = - A2 * k2 * cosf(k2 * r.z + w2 * t);
+          }
+        }
+
+        if (g.useShaders) {
+          rEC = glm::vec3(glm::vec4(r, 1.0));
+          lrEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
+        }
+        else
+          rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
+        if (g.lighting) {
+          if (g.useShaders) {
+            nEC = glm::normalize(n);
+            lnEC = normalMatrix * glm::normalize(n);
+          }
+          else
+            nEC = normalMatrix * glm::normalize(n);
+          if (g.fixed)
+            glNormal3fv(&nEC[0]);
+          else {
+            glm::vec3 c;
+            if (g.useShaders)
+              c = computeLighting(lrEC, lnEC);
+            else
+              c = computeLighting(rEC, nEC);
+            glColor3fv(&c[0]);
+          }
+        }
+        glVertex3fv(&rEC[0]);
       }
+      glEnd();
     }
   }
 
   if(g.useShaders)
     glUseProgram(0);
-
   if (g.lighting)
     glDisable(GL_LIGHTING);
 

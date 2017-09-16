@@ -2,6 +2,7 @@
 
 uniform float uShininess;
 uniform bool uPhong, uPixel, uPositional, uFixed, uLighting;
+uniform mat3 uNormalMat;
 
 varying vec3 vColor, vPosition, vNormal;
 
@@ -69,7 +70,7 @@ void main (void)
 
   if (uLighting) {
     if (uFixed && uPixel)
-      gl_FragColor = vec4(computePixelLighting(vPosition, vNormal), pos);
+      gl_FragColor = vec4(computePixelLighting(vPosition, uNormalMat * normalize(vNormal)), pos);
     else
       gl_FragColor = vec4(vColor, pos);
   }

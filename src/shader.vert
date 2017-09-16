@@ -68,35 +68,41 @@ vec3 computeVertexLighting(vec3 rEC, vec3 nEC)
   return color;
 }
 
-void main(void)
+vec4 calcSineYValue()
 {
-  vec4 osVert = gl_Vertex;
-  float stepSize = 2.0 / float(uTesselation);
+  vec4 v = gl_Vertex;
 
   const float A1 = 0.25, k1 = 2.0 * M_PI, w1 = 0.25;
   const float A2 = 0.25, k2 = 2.0 * M_PI, w2 = 0.25;
-  vec4 esVert, csVert;
+  int i,j;
 
-  int i, j;
-  for (i = 0; i < uTesselation; i++) {
-    for (j = 0; j <= uTesselation; j++) {
+  float stepSize = 2.0 / float(uTesselation);
+
+  for (i = 0; i < uTesselation; i++){
+    for (j = 0; j <= uTesselation; j++){
       if (uDimention == 2) {
-        osVert.y = A1 * sin(k1 * osVert.x + w1 * uTime);
+        v.y = A1 * sin(k1 * v.x + w1 * uTime);
       } else if (uDimention == 3) {
-        osVert.y = A1 * sin(k1 * osVert.x + w1 * uTime) + A2 * sin(k2 * osVert.z + w2 * uTime);
+        v.y = A1 * sin(k1 * v.x + w1 * uTime) + A2 * sin(k2 * v.z + w2 * uTime);
       }
-
-      esVert = uModelViewMat * osVert;
-      csVert = uProjectionMat * esVert;
-      gl_Position = csVert;
-
-      vPosition = vec3(esVert);
-      vNormal = gl_Normal;
-
-      if (uFixed && !uPixel)
-        vColor = computeVertexLighting(vPosition, uNormalMat * normalize(vNormal));
-      else
-        vColor = vec3(gl_Color);
     }
   }
+
+  return v;
+}
+
+void main(void)
+{
+  vec4 osVert = calcSineYValue();
+  vec4 esVert = uModelViewMat * osVert;
+  vec4 csVert = uProjectionMat * esVert;
+  gl_Position = csVert;
+
+  vPosition = vec3(esVert);
+  vNormal = gl_Normal;
+
+  if (uFixed && !uPixel)
+    vColor = computeVertexLighting(vPosition, uNormalMat * normalize(vNormal));
+  else
+    vColor = vec3(gl_Color);
 }
