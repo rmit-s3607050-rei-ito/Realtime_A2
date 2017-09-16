@@ -1,24 +1,22 @@
 //shader.vert
+varying vec3 color;
 
 #define M_PI 3.1415926535897932384626433832795
 
-// uniform = values obtained from sinewave3D-glm.cpp file
-uniform mat3 nMat;          // normalMatrix
-uniform mat4 mvMat;         // modelViewMatrix
-uniform mat4 pMat;          // projectionMatrix
+uniform mat4 mvMat;
+uniform mat3 nMat;
+uniform mat4 pMat;
 
-uniform int ts;             // tesselation
+uniform int ts;
 uniform int waveDim;
 uniform float time;
 
-// varying = values shared with shader.frag
-varying vec3 vColor;
-
 vec3 computeLighting(vec4 rEC, vec3 nEC) {
-  // Using computeLighting() from sinewave3D-glm.cpp (modified to work)
   float shininess = 50.0;
+  // Using computeLighting() from sinewave3D-glm.cpp (modified to work)
 
   vec3 color = vec3(0.0);
+
   vec3 La = vec3(0.2);
   vec3 Ma = vec3(0.2);
   vec3 ambient = (La * Ma);
@@ -53,36 +51,36 @@ vec3 computeLighting(vec4 rEC, vec3 nEC) {
   return color;
 }
 
-void main(void)
+void calcSineYValue()
 {
-  // Calculate y values in here, x and z is calculated in cpu and passed here
-  vec4 v = gl_Vertex;
-
-  float tesselation = float(ts);
-  float stepSize = 2.0 / tesselation;
-
   const float A1 = 0.25, k1 = 2.0 * M_PI, w1 = 0.25;
   const float A2 = 0.25, k2 = 2.0 * M_PI, w2 = 0.25;
-  int i, j;
+  int i,j;
 
-  vec4 esVert, csVert;
+  float stepSize = 2.0 / float(ts);
 
   for (j = 0; j < ts; j++){
     for (i = 0; i <= ts; i++){
       if (waveDim == 2) {
-        v.y = A1 * sin(k1 * v.x + w1 * time);
+        gl_Vertex.y = A1 * sin(k1 * gl_Vertex.x + w1 * time);
       } else if (waveDim == 3) {
-        v.y = A1 * sin(k1 * v.x + w1 * time) + A2 * sin(k2 * v.z + w2 * time);
+        gl_Vertex.y = A1 * sin(k1 * gl_Vertex.x + w1 * time) + A2 * sin(k2 * gl_Vertex.z + w2 * time);
       }
-
-      //esVert = gl_ModelViewMatrix * v;
-      //csVert = gl_ProjectionMatrix * esVert;
-      esVert = mvMat * v;
-      csVert = pMat * esVert;
-      gl_Position = csVert;
-
-      vColor = gl_Color;
-      //vColor = computeLighting(esVert, nMat * normalize(gl_Normal));
     }
   }
+}
+
+void main(void)
+{
+  calcSineYValue();
+
+  // os - object space, es - eye space, cs - clip space
+  vec4 osVert = gl_Vertex;
+  vec4 esVert = mvMat * osVert;
+  vec4 csVert = pMat * esVert;
+  gl_Position = csVert;
+  // Equivalent to: gl_Position = gl_ProjectionMatrix * gl_ModelViewMatrix * gl_Vertex
+  gl_Normal = nMat * normalize(gl_Normal);
+
+  color = computeLighting(esVert, gl_Normal);
 }
