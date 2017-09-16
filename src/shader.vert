@@ -2,9 +2,9 @@
 
 #define M_PI 3.1415926535897932384626433832795
 
-uniform int uTesselation, uDimention;
+uniform int uTesselation, uDimension;
 uniform float uShininess, uTime;
-uniform bool uPhong, uPixel, uPositional, uFixed, uFlat;
+uniform bool uPhong, uPixel, uPositional, uFixed, uFlat, uLighting;
 uniform mat3 uNormalMat;
 uniform mat4 uModelViewMat, uProjectionMat;
 
@@ -74,21 +74,38 @@ vec4 calcSineYValue()
 
   const float A1 = 0.25, k1 = 2.0 * M_PI, w1 = 0.25;
   const float A2 = 0.25, k2 = 2.0 * M_PI, w2 = 0.25;
-  int i,j;
-
-  float stepSize = 2.0 / float(uTesselation);
-
-  for (i = 0; i < uTesselation; i++){
-    for (j = 0; j <= uTesselation; j++){
-      if (uDimention == 2) {
-        v.y = A1 * sin(k1 * v.x + w1 * uTime);
-      } else if (uDimention == 3) {
-        v.y = A1 * sin(k1 * v.x + w1 * uTime) + A2 * sin(k2 * v.z + w2 * uTime);
-      }
-    }
+  
+  if (uDimension == 2) {
+    v.y = A1 * sin(k1 * v.x + w1 * uTime);
+  } else if (uDimension == 3) {
+    v.y = A1 * sin(k1 * v.x + w1 * uTime) + A2 * sin(v.z + w2 * uTime);
   }
 
   return v;
+}
+
+vec3 calcNormals(vec4 r)
+{
+  vec3 n;
+
+  const float A1 = 0.25, k1 = 2.0 * M_PI, w1 = 0.25;
+  const float A2 = 0.25, k2 = 2.0 * M_PI, w2 = 0.25;
+
+  if (uDimension == 2) {
+    if (uLighting) {
+      n.x = - A1 * k1 * cos(k1 * r.x + w1 * uTime);
+      n.y = 1.0;
+      n.z = 0.0;
+    }
+  } else if (uDimension == 3) {
+    if (uLighting) {
+      n.x = - A1 * k1 * cos(k1 * r.x + w1 * uTime);
+      n.y = 1.0;
+      n.z = - A2 * k2 * cos(k2 * r.z + w2 * uTime);
+    }
+  }
+
+  return n;
 }
 
 void main(void)
@@ -99,7 +116,7 @@ void main(void)
   gl_Position = csVert;
 
   vPosition = vec3(esVert);
-  vNormal = gl_Normal;
+  vNormal = calcNormals(osVert);
 
   if (uFixed && !uPixel)
     vColor = computeVertexLighting(vPosition, uNormalMat * normalize(vNormal));
