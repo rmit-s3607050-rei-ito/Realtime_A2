@@ -528,7 +528,7 @@ glm::vec3 computeLighting(glm::vec3 & rEC, glm::vec3 & nEC)
 
   // Light direction vector. Default for LIGHT0 is a directional light
   // along z axis for all vertices, i.e. <0, 0, 1>
-  glm::vec3 lEC( 0.0, 0.0, 1.0 );
+  glm::vec3 lEC( 0.5, 0.5, 0.5 );
 
   // Test if normal points towards light source, i.e. if polygon
   // faces toward the light - if not then no diffuse or specular
@@ -540,7 +540,7 @@ glm::vec3 computeLighting(glm::vec3 & rEC, glm::vec3 & nEC)
     // Lambert diffuse: D=Ld×Md×cosθ
     // Ld: default diffuse light color for GL_LIGHT0 is white (1.0, 1.0, 1.0).
     // Md: default diffuse material color is grey (0.8, 0.8, 0.8).
-    glm::vec3 Ld(1.0);
+    glm::vec3 Ld(0.0, 0.5, 0.5);
     glm::vec3 Md(0.8);
     // Need normalized normal to calculate cosθ,
     // light vector <0, 0, 1> is already normalized
@@ -555,7 +555,7 @@ glm::vec3 computeLighting(glm::vec3 & rEC, glm::vec3 & nEC)
     // but default for fixed pipeline is black, which means can't see
     // specular reflection. Need to set it to same value for fixed
     // pipeline lighting otherwise will look different.
-    glm::vec3 Ls(1.0);
+    glm::vec3 Ls(0.8, 0.8, 0.8);
     glm::vec3 Ms(1.0);
     // Default viewer is at infinity along z axis <0, 0, 1> i.e. a
     // non local viewer (see glLightModel and GL_LIGHT_MODEL_LOCAL_VIEWER)
@@ -617,8 +617,7 @@ void unbindVBOs()
      glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
 
-void initVBO(int tess)
-{
+void initWaveVBO(int tess) {
   const float A1 = 0.25, k1 = 2.0 * M_PI, w1 = 0.25;
   const float A2 = 0.25, k2 = 2.0 * M_PI, w2 = 0.25;
   glm::vec3 r, n, rEC, nEC;
@@ -628,7 +627,78 @@ void initVBO(int tess)
 
   numVerts = (tess + 1) * (tess + 1);
   numIndices = tess * tess * 6;
+  vertices = (Vertex*) calloc(numVerts, sizeof(Vertex));
+  indices = (unsigned int*) calloc(numIndices, sizeof(int));
 
+  // Store vertices
+  for (size_t j = 0; j <= tess; ++j) {
+    for (size_t i = 0; i <= tess; ++i) {
+      r.x = -1.0 + i * stepSize;
+      r.z = -1.0 + j * stepSize;
+
+      if(g.waveDim == 2) {
+        if(g.useShaders)
+          r.y = 0.0;
+        else
+          r.y = A1 * sinf(k1 * r.x + w1 * t);
+        if (g.lighting) {
+          n.x = - A1 * k1 * cosf(k1 * r.x + w1 * t);
+          n.y = 1.0;
+          n.z = 0.0;
+        }
+      } else if (g.waveDim == 3) {
+        if (g.useShaders)
+          r.y = 0.0;
+        else
+          r.y = A1 * sinf(k1 * r.x + w1 * t) + A2 * sinf(k2 * r.z + w2 * t);
+        if(g.lighting) {
+          n.x = - A1 * k1 * cosf(k1 * r.x + w1 * t);
+          n.y = 1.0;
+          n.z = - A2 * k2 * cosf(k2 * r.z + w2 * t);
+        }
+      }
+
+      size_t index = j * (tess + 1) + i;
+      rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
+      vertices[index].pos = rEC;
+
+      if (g.lighting) {
+        n = glm::vec3(0.0, 1.0, 0.0);
+        nEC = normalMatrix * glm::normalize(n);
+        if (g.fixed) {
+          vertices[index].normal = nEC;
+        } else {
+          glm::vec3 colors = computeLighting(rEC, nEC);
+          vertices[index].color = colors;
+        }
+      }
+    }
+  }
+
+  // Store indices
+  size_t index = 0;
+  for (size_t i = 0; i < tess ; ++i) {
+    for (size_t j = 0; j < tess; ++j) {
+      indices[index++] = i * (tess + 1) + j;
+      indices[index++] = (i + 1) * (tess + 1) + j;
+      indices[index++] = i * (tess + 1) + j + 1;
+      indices[index++] = i * (tess + 1) + j + 1;
+      indices[index++] = (i + 1) * (tess + 1) + j;
+      indices[index++] = (i + 1) * (tess + 1) + j + 1;
+    }
+  }
+}
+
+void initGridVBO(int tess)
+{
+  const float A1 = 0.25, k1 = 2.0 * M_PI, w1 = 0.25;
+  const float A2 = 0.25, k2 = 2.0 * M_PI, w2 = 0.25;
+  glm::vec3 r, n, rEC, nEC;
+  float x, z;
+  float stepSize = 2.0 / tess;
+
+  numVerts = (tess + 1) * (tess + 1);
+  numIndices = tess * tess * 6;
   vertices = (Vertex*) calloc(numVerts, sizeof(Vertex));
   indices = (unsigned int*) calloc(numIndices, sizeof(int));
 
@@ -639,32 +709,12 @@ void initVBO(int tess)
       r.z = -1.0 + j * stepSize;
       r.y = 0.0;
 
-      if (g.wave) {
-        if (g.waveDim == 2) {
-          r.y = A1 * sinf(k1 * r.x + w1 * t);
-          if (g.lighting) {
-            n.x = - A1 * k1 * cosf(k1 * r.x + w1 * t);
-            n.y = 1.0;
-            n.z = 0.0;
-          }
-        } else if (g.waveDim == 3) {
-          r.y = A1 * sinf(k1 * r.x + w1 * t) + A2 * sinf(k2 * r.z + w2 * t);
-          if (g.lighting) {
-            n.x = - A1 * k1 * cosf(k1 * r.x + w1 * t);
-            n.y = 1.0;
-            n.z = - A2 * k2 * cosf(k2 * r.z + w2 * t);
-          }
-        }
-      }
-
-      rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
-
       size_t index = j * (tess + 1) + i;
+      rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
       vertices[index].pos = rEC;
 
       if (g.lighting) {
-        if (!g.wave)
-          n = glm::vec3(0.0, 1.0, 0.0);
+        n = glm::vec3(0.0, 1.0, 0.0);
         nEC = normalMatrix * glm::normalize(n);
         if (g.fixed) {
           vertices[index].normal = nEC;
@@ -692,10 +742,17 @@ void initVBO(int tess)
   }
 }
 
+void initVBO() {
+  if(g.wave)
+    initWaveVBO(g.tess);
+  else
+    initGridVBO(g.tess);
+}
+
 void resetVBOS()
 {
   unbindVBOs();
-  initVBO(g.tess);
+  initVBO();
   bindVBOs();
 }
 
@@ -715,10 +772,7 @@ void drawGrid(int tess)
   glm::vec3 r, n, rEC, nEC;
   int i, j;
 
-  if (g.useShaders) {
-    applyShading();
-  }
-  else if (g.lighting && g.fixed) {
+  if (g.lighting && g.fixed) {
     glEnable(GL_LIGHTING);
     glEnable(GL_LIGHT0);
     glEnable(GL_NORMALIZE);
@@ -863,22 +917,24 @@ void drawSineWave(int tess)
         if (g.waveDim == 2) {
           if (g.useShaders)
             r.y = 0.0;
-          else
+          else {
             r.y = A1 * sinf(k1 * r.x + w1 * t);
-          if (g.lighting) {
-            n.x = - A1 * k1 * cosf(k1 * r.x + w1 * t);
-            n.y = 1.0;
-            n.z = 0.0;
+            if (g.lighting) {
+              n.x = - A1 * k1 * cosf(k1 * r.x + w1 * t);
+              n.y = 1.0;
+              n.z = 0.0;
+            }
           }
         } else if (g.waveDim == 3) {
           if (g.useShaders)
             r.y = 0.0;
-          else
+          else {
             r.y = A1 * sinf(k1 * r.x + w1 * t) + A2 * sinf(k2 * r.z + w2 * t);
-          if (g.lighting) {
-            n.x = - A1 * k1 * cosf(k1 * r.x + w1 * t);
-            n.y = 1.0;
-            n.z = - A2 * k2 * cosf(k2 * r.z + w2 * t);
+            if (g.lighting) {
+              n.x = - A1 * k1 * cosf(k1 * r.x + w1 * t);
+              n.y = 1.0;
+              n.z = - A2 * k2 * cosf(k2 * r.z + w2 * t);
+            }
           }
         }
 
@@ -913,10 +969,11 @@ void drawSineWave(int tess)
         if (g.waveDim == 3) {
           if (g.useShaders)
             r.y = 0.0;
-          else
+          else {
             r.y = A1 * sinf(k1 * r.x + w1 * t) + A2 * sinf(k2 * r.z + w2 * t);
-          if (g.lighting) {
-            n.z = - A2 * k2 * cosf(k2 * r.z + w2 * t);
+            if (g.lighting) {
+              n.z = - A2 * k2 * cosf(k2 * r.z + w2 * t);
+            }
           }
         }
 
@@ -1150,11 +1207,15 @@ void keyboard(unsigned char key, int x, int y)
     break;
   case 'f': //gpu/cpu lighting
     g.fixed = !g.fixed;
+    if(g.vbo)
+      resetVBOS();
     printf("fixed: %s\n", g.fixed?"true":"false");
     glutPostRedisplay();
     break;
   case 'g': //shaders
     g.useShaders = !g.useShaders;
+    if(g.vbo)
+      resetVBOS();
     printf("shaders: %s\n", g.useShaders?"true":"false");
     break;
   case 'H': //increase shininess
@@ -1209,7 +1270,7 @@ void keyboard(unsigned char key, int x, int y)
   case 'v': //VBO mode
     g.vbo = !g.vbo;
     if (g.vbo) {
-      initVBO(g.tess);
+      initVBO();
       bindVBOs();
     }
     else
