@@ -3,9 +3,9 @@
  * $Id: sinewave3D-glm.cpp,v 1.8 2017/08/23 12:56:02 gl Exp gl $
  */
 
- // NOTE: need to be placed before #include, enables glUseProgram to work
- #define GL_GLEXT_PROTOTYPES
- #include "shaders.h"
+// NOTE: need to be placed before #include, enables glUseProgram() to work
+#define GL_GLEXT_PROTOTYPES
+#include "shaders.h"
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -25,8 +25,8 @@
 static int shaderProgram;
 static const char* vertexFile = "./shader.vert";
 static const char* fragmentFile = "./shader.frag";
-//static GLint uniformLocations[];
-static GLint tesselationLoc, dimentionLoc;
+// Uniform locations for variables that are passed into the shader program;
+static GLint tesselationLoc, dimensionLoc;
 static GLint shineLoc, timeLoc;
 static GLint phongLoc, pixelLoc, positionalLoc, fixedLoc, flatLoc;
 static GLint normalMatLoc, modelViewMatLoc, projectionMatLoc;
@@ -46,32 +46,32 @@ typedef enum {
 
 bool debug[d_nflags] =
 {
-  false, //d_drawSineWave
-  false, //d_mouse
-  false, //d_key
-  false, //d_animation
-  false, //d_lighting
-  false, //d_OSD
-  false, //d_matrices
-  false, //d_computeLighting
+  false, // d_drawSineWave
+  false, // d_mouse
+  false, // d_key
+  false, // d_animation
+  false, // d_lighting
+  false, // d_OSD
+  false, // d_matrices
+  false, // d_computeLighting
 };
 
 typedef struct { float r, g, b; } color3f;
 
 typedef enum { FRAME, FLAGS, VALUES } OSD;
 
-// NOTE: begin VBO related variables
+// Buffer offset used in VBOs, essentially the same as assignment 1
 #define BUFFER_OFFSET(i) ((void*)(i))
 
+// Defined vertex for VBOs
 typedef struct {
   glm::vec3 pos, normal, color;
 } Vertex;
 
-Vertex *vertices;
-unsigned int* indices;
-size_t numVerts, numIndices;
-unsigned vbo, ibo, cbo;
-// NOTE: end VBO related variables
+Vertex *vertices;             // Store vertices for vbos
+unsigned int* indices;        // Store indices for vbos
+size_t numVerts, numIndices;  // Count number of vertices/indices
+unsigned vbo, ibo, cbo;       // Buffers
 
 typedef struct {
   bool animate;
@@ -90,7 +90,7 @@ typedef struct {
   bool consolePM;
   bool multiView;
 
-  // new
+  // additions
   bool flat;
   bool positional;
   bool fixed;
@@ -106,36 +106,37 @@ typedef struct {
 
 Global g =
 {
-  false, //animate
-  0.0, //t
-  0.0, //lastT
-  true, //lighting
-  false, //twoSide
-  false, //drawNormals
-  0, //width
-  0, //height
-  8, //tess
-  2, //waveDim
-  0, //frameCount
-  0.0, //frameRate
-  1.0, //displayStatsInterval
-  0, //lastStatsDisplayT
-  true, //displayOSD
-  false, //consolePM
-  false, //multiView
+  // preset in original code
+  false, // animate
+  0.0,   // t
+  0.0,   // lastT
+  true,  // lighting
+  false, // twoSide
+  false, // drawNormals
+  0,     // width
+  0,     // height
+  8,     // tess
+  2,     // waveDim
+  0,     // frameCount
+  0.0,   // frameRate
+  1.0,   // displayStatsInterval
+  0,     // lastStatsDisplayT
+  true,  // displayOSD
+  false, // consolePM
+  false, // multiView
 
-  // new
-  false, //flat
-  false, //positional
-  false, //fixed
-  false, //useShaders
-  20.0, //shininess
-  false, //phong
-  FRAME, //option
-  false, //perPixel
-  false, //wave
-  false, //vbo
-  false, //wireframe
+  // new added flags/values
+  false, // flat
+  false, // positional
+  false, // fixed
+  false, // useShaders
+  20.0,  // shininess
+  false, // phong
+  FRAME, // option
+  false, // perPixel
+  false, // wave
+  false, // vbo
+  false, // wireframe
 };
 
 typedef enum { inactive, rotate, pan, zoom } CameraControl;
@@ -147,9 +148,9 @@ struct camera_t {
   CameraControl control;
 } camera = { 0, 0, 30.0, -30.0, 1.0, inactive };
 
+// Colors defined
 glm::vec3 cyan(0.0, 1.0, 1.0);
 glm::vec3 cyanDiffuse(0.0, 0.5, 0.5);
-glm::vec3 magenta(1.0, 0.0, 1.0);
 glm::vec3 yellow(1.0, 1.0, 0.0);
 glm::vec3 white(1.0, 1.0, 1.0);
 glm::vec3 grey(0.8, 0.8, 0.8);
@@ -161,6 +162,7 @@ const float milli = 1000.0;
 glm::mat4 modelViewMatrix;
 glm::mat3 normalMatrix;
 
+/* ########## DEBUGGING RELATED FUNCTIONS ########## */
 int err;
 
 void printVec(float *v, int n)
@@ -194,6 +196,7 @@ void printMatrixColumnMajor(float *m, int n)
   printf("\n");
 }
 
+/* ########## ENABLING SHADER PROGRAM ########## */
 void applyShading()
 {
   // Define projection matrix
@@ -202,10 +205,10 @@ void applyShading()
   // Place program in use for shaders
   glUseProgram(shaderProgram);
 
-  // .vert uniforms
+  // Uniforms that can be passed into both shader.vert and shader.frag
   // ints
   glUniform1i(tesselationLoc, g.tess);
-  glUniform1i(dimentionLoc, g.waveDim);
+  glUniform1i(dimensionLoc, g.waveDim);
   // floats
   glUniform1f(shineLoc, g.shininess);
   glUniform1f(timeLoc, g.t);
@@ -215,15 +218,14 @@ void applyShading()
   glUniform1i(positionalLoc, g.positional);
   glUniform1i(fixedLoc, g.fixed);
   glUniform1i(flatLoc, g.flat);
-  // mats
+  glUniform1i(lightingLoc, g.lighting);
+  // matricies
   glUniformMatrix3fv(normalMatLoc, 1, false, &normalMatrix[0][0]);
   glUniformMatrix4fv(modelViewMatLoc, 1, false, &modelViewMatrix[0][0]);
   glUniformMatrix4fv(projectionMatLoc, 1, false, &projectionMatrix[0][0]);
-
-  // .frag uniforms
-  glUniform1i(lightingLoc, g.lighting); //bool
 }
 
+/* ########## DEFAULT FUNCTIONS ########## */
 void init(void)
 {
   glClearColor(0.0, 0.0, 0.0, 1.0);
@@ -234,10 +236,10 @@ void init(void)
   // Define the shader program using the input files (predefined)
   shaderProgram = getShader(vertexFile, fragmentFile);
 
-  // .vert uniforms
+  // Obtain uniform variables from the shader program
   // ints
   tesselationLoc = glGetUniformLocation(shaderProgram, "uTesselation");
-  dimentionLoc = glGetUniformLocation(shaderProgram, "uDimention");
+  dimensionLoc = glGetUniformLocation(shaderProgram, "uDimension");
   // floats
   shineLoc = glGetUniformLocation(shaderProgram, "uShininess");
   timeLoc = glGetUniformLocation(shaderProgram, "uTime");
@@ -247,13 +249,11 @@ void init(void)
   positionalLoc = glGetUniformLocation(shaderProgram, "uPositional");
   fixedLoc = glGetUniformLocation(shaderProgram, "uFixed");
   flatLoc = glGetUniformLocation(shaderProgram, "uFlat");
+  lightingLoc = glGetUniformLocation(shaderProgram, "uLighting");
   // mats
   normalMatLoc = glGetUniformLocation(shaderProgram, "uNormalMat");
   modelViewMatLoc = glGetUniformLocation(shaderProgram, "uModelViewMat");
   projectionMatLoc = glGetUniformLocation(shaderProgram, "uProjectionMat");
-
-  // .frag uniforms
-  lightingLoc = glGetUniformLocation(shaderProgram, "uLighting"); //bool
 }
 
 void reshape(int w, int h)
@@ -319,6 +319,7 @@ void drawVector(glm::vec3 & o, glm::vec3 & v, float s,
 // Console performance meter
 void consolePM()
 {
+  // Console output also toggles depending on the OSD option
   if (g.option == FRAME) {
     printf("FRAME\n"); //OSD option
     printf("frame rate (f/s):  %5.0f\n", g.frameRate);
@@ -575,6 +576,7 @@ glm::vec3 computeLighting(glm::vec3 & rEC, glm::vec3 & nEC)
   return color;
 }
 
+/* ########## VBO SETUP, BINDING, UNDBINDING ########## */
 void bindVBOs()
 {
   // Generate buffers for verticies, indices and colors
@@ -597,8 +599,11 @@ void bindVBOs()
 
 void unbindVBOs()
 {
+  // Disable client states that were previously enabled
   glDisableClientState(GL_VERTEX_ARRAY);
   glDisableClientState(GL_NORMAL_ARRAY);
+  glDisableClientState(GL_COLOR_ARRAY);
+
   // Free memory allocated to indicies and vertices
   free(indices);
   free(vertices);
@@ -619,18 +624,27 @@ void unbindVBOs()
 
 void initGridVBO(int tess)
 {
+  /* NOTE: With VBOs, both the grid and sine wave have been drawn using GL_TRIANGLES
+   * instead of GL_QUADS. The code for calculating index and storing indices is
+   * mainly based on assignment 1. */
+
+  // Set up variables (same as drawGrid)
   const float A1 = 0.25, k1 = 2.0 * M_PI, w1 = 0.25;
   const float A2 = 0.25, k2 = 2.0 * M_PI, w2 = 0.25;
   glm::vec3 r, n, rEC, nEC;
   float x, z;
   float stepSize = 2.0 / tess;
 
+  // Calculate number of verts and indices to use in calculations
   numVerts = (tess + 1) * (tess + 1);
   numIndices = tess * tess * 6;
+  // Allocate memory to indices and verties to place later in buffers
   vertices = (Vertex*) calloc(numVerts, sizeof(Vertex));
   indices = (unsigned int*) calloc(numIndices, sizeof(int));
 
-  // Store vertices
+  /* [1.] Store vertices
+   * - Logic is essentially the same as drawGrid(), but we found the r.z += stepSize,
+   * section wasn't required, so it was left out */
   for (size_t j = 0; j <= tess; ++j) {
     for (size_t i = 0; i <= tess; ++i) {
       r.x = -1.0 + i * stepSize;
@@ -656,7 +670,7 @@ void initGridVBO(int tess)
     }
   }
 
-  // Store indices
+  // [2]. Store indices
   size_t index = 0;
   for (size_t i = 0; i < tess ; ++i) {
     for (size_t j = 0; j < tess; ++j) {
@@ -672,9 +686,10 @@ void initGridVBO(int tess)
 
 void initWaveVBO(int tess)
 {
+  // Same variables as initGridVBO() except time added for wave animation
   const float A1 = 0.25, k1 = 2.0 * M_PI, w1 = 0.25;
   const float A2 = 0.25, k2 = 2.0 * M_PI, w2 = 0.25;
-  glm::vec3 r, n, rEC, nEC, lrEC, lnEC;
+  glm::vec3 r, n, rEC, nEC, lrEC, lnEC, c;
   float x, z;
   float stepSize = 2.0 / tess;
   float t = g.t;
@@ -684,7 +699,11 @@ void initWaveVBO(int tess)
   vertices = (Vertex*) calloc(numVerts, sizeof(Vertex));
   indices = (unsigned int*) calloc(numIndices, sizeof(int));
 
-  // Store vertices
+  /* [1]. Store vertices
+   * Uses same logic as drawSineWave(), instead replacing calls such as:
+   * - glColor3fv with vertices[index].color, as we are storing these values instead
+   * - glDrawElements will pass then draw the shapes using these vertices, also passing
+   * them into the shader, if enabled */
   for (size_t j = 0; j <= tess; ++j) {
     for (size_t i = 0; i <= tess; ++i) {
       r.x = -1.0 + i * stepSize;
@@ -714,31 +733,42 @@ void initWaveVBO(int tess)
         }
       }
 
+      // Calculate index to store vertex at
       size_t index = j * (tess + 1) + i;
 
-      if (g.useShaders && g.fixed) {
+      /* When shaders on, ignore modelViewMatrix and normal, since it is passed into shader
+       * it is required however for lighting calculations (when fixed is off) */
+      if (g.useShaders) {
         rEC = glm::vec3(glm::vec4(r, 1.0));
-        if (g.lighting) {
-          nEC = glm::normalize(n);
-          vertices[index].normal = nEC;
-        }
-      }
-      else {
-        rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
-        if (g.lighting) {
-          nEC = normalMatrix * glm::normalize(n);
-          if (g.fixed)
+        nEC = glm::normalize(n);
+        if(g.lighting) {
+          if(g.fixed)
             vertices[index].normal = nEC;
           else {
-            if (g.useShaders)
-              rEC = glm::vec3(glm::vec4(r, 1.0));
-            glm::vec3 c = computeLighting(rEC, nEC);
+            lrEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
+            lnEC = normalMatrix * glm::normalize(n);
+            c = computeLighting(lrEC, lnEC);
+            glColor3fv(&c[0]);
+          }
+        }
+      } else {
+        rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
+        nEC = normalMatrix * glm::normalize(n);
+        if(g.lighting) {
+          if(g.fixed)
+            vertices[index].normal = nEC;
+          else {
+            c = computeLighting(rEC, nEC);
             vertices[index].color = c;
           }
         }
+        else
+          vertices[index].color = cyan;
       }
       vertices[index].pos = rEC;
 
+      /* Applicable only to 3D wave, essentially same calcuations as above, also
+       * mirroring drawSineWave() */
       if (g.waveDim == 3) {
         if (g.useShaders && g.fixed)
           r.y = 0.0;
@@ -750,32 +780,38 @@ void initWaveVBO(int tess)
         }
       }
 
-      if (g.useShaders && g.fixed) {
+      if (g.useShaders) {
         rEC = glm::vec3(glm::vec4(r, 1.0));
-        if (g.lighting) {
-          nEC = glm::normalize(n);
-          vertices[index].normal = nEC;
-        }
-      }
-      else {
-        rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
-        if (g.lighting) {
-          nEC = normalMatrix * glm::normalize(n);
-          if (g.fixed)
+        nEC = glm::normalize(n);
+        if(g.lighting) {
+          if(g.fixed)
             vertices[index].normal = nEC;
           else {
-            if (g.useShaders)
-              rEC = glm::vec3(glm::vec4(r, 1.0));
-            glm::vec3 c = computeLighting(rEC, nEC);
+            lrEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
+            lnEC = normalMatrix * glm::normalize(n);
+            c = computeLighting(lrEC, lnEC);
             vertices[index].color = c;
           }
         }
+      } else {
+        rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
+        nEC = normalMatrix * glm::normalize(n);
+        if(g.lighting) {
+          if(g.fixed)
+            vertices[index].normal = nEC;
+          else {
+            c = computeLighting(rEC, nEC);
+            vertices[index].color = c;
+          }
+        }
+        else
+          vertices[index].color = cyan;
       }
       vertices[index].pos = rEC;
     }
   }
 
-  // Store indices
+  // [2]. Store indices
   size_t index = 0;
   for (size_t i = 0; i < tess ; ++i) {
     for (size_t j = 0; j < tess; ++j) {
@@ -789,8 +825,9 @@ void initWaveVBO(int tess)
   }
 }
 
-void initVBO()
+void initVBOs()
 {
+  // Determine appropriate shape to initialize
   if(g.wave)
     initWaveVBO(g.tess);
   else
@@ -799,20 +836,25 @@ void initVBO()
 
 void resetVBOS()
 {
+  /* Recalculate new values of VBO, used when tesselating, moving camera, animating
+   * sine wave */
   unbindVBOs();
-  initVBO();
+  initVBOs();
   bindVBOs();
 }
 
 void drawVBOShape()
 {
+  // Set up pointers to in order to draw verties and indices
   glVertexPointer(3, GL_FLOAT, sizeof(Vertex), BUFFER_OFFSET(0));
   glNormalPointer(GL_FLOAT, sizeof(Vertex), BUFFER_OFFSET(sizeof(glm::vec3)));
   glColorPointer(3, GL_FLOAT, sizeof(Vertex), BUFFER_OFFSET(sizeof(glm::vec3) + sizeof(glm::vec3)));
 
+  // Draw all elements specified via VBOs
   glDrawElements(GL_TRIANGLES, numIndices, GL_UNSIGNED_INT, 0);
 }
 
+/* ########## DRAWING SHAPES (GRID/SINEWAVE) ########## */
 void drawGrid(int tess)
 {
   float stepSize = 2.0 / tess;
@@ -839,9 +881,11 @@ void drawGrid(int tess)
   else
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
+  // Render using VBOs
   if (g.vbo) {
     drawVBOShape();
   }
+  // Render via immediate mode
   else {
     for (j = 0; j < tess; j++) {
       glBegin(GL_QUAD_STRIP);
@@ -887,9 +931,6 @@ void drawGrid(int tess)
     }
   }
 
-  if (g.useShaders)
-    glUseProgram(0);
-
   if (g.lighting)
     glDisable(GL_LIGHTING);
 
@@ -926,7 +967,7 @@ void drawSineWave(int tess)
   const float A1 = 0.25, k1 = 2.0 * M_PI, w1 = 0.25;
   const float A2 = 0.25, k2 = 2.0 * M_PI, w2 = 0.25;
   float stepSize = 2.0 / tess;
-  glm::vec3 r, n, rEC, nEC, lrEC, lnEC;
+  glm::vec3 r, n, rEC, nEC, lrEC, lnEC, c;
   int i, j;
   float t = g.t;
 
@@ -991,23 +1032,31 @@ void drawSineWave(int tess)
           }
         }
 
-        if (g.useShaders && g.fixed) {
+        /* When shaders on: (reiterate)
+         * - Pass in pos/normal eye coordinate without modelViewMatrix and normalMatrix
+         * - When lighting is on however, it requires normal and modelViewMatrix*/
+        if (g.useShaders) {
           rEC = glm::vec3(glm::vec4(r, 1.0));
-          if (g.lighting) {
-            nEC = glm::normalize(n);
-            glNormal3fv(&nEC[0]);
-          }
-        }
-        else {
-          rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
-          if (g.lighting) {
-            nEC = normalMatrix * glm::normalize(n);
-            if (g.fixed)
+          nEC = glm::normalize(n);
+          if(g.lighting) {
+            if(g.fixed)
               glNormal3fv(&nEC[0]);
             else {
-              if (g.useShaders)
-                rEC = glm::vec3(glm::vec4(r, 1.0));
-              glm::vec3 c = computeLighting(rEC, nEC);
+              lrEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
+              lnEC = normalMatrix * glm::normalize(n);
+              c = computeLighting(lrEC, lnEC);
+              glColor3fv(&c[0]);
+            }
+          }
+        } // Shaders off, compute normally
+        else {
+          rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
+          nEC = normalMatrix * glm::normalize(n);
+          if(g.lighting) {
+            if(g.fixed)
+              glNormal3fv(&nEC[0]);
+            else {
+              c = computeLighting(rEC, nEC);
               glColor3fv(&c[0]);
             }
           }
@@ -1027,23 +1076,27 @@ void drawSineWave(int tess)
           }
         }
 
-        if (g.useShaders && g.fixed) {
+        if (g.useShaders) {
           rEC = glm::vec3(glm::vec4(r, 1.0));
-          if (g.lighting) {
-            nEC = glm::normalize(n);
-            glNormal3fv(&nEC[0]);
-          }
-        }
-        else {
-          rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
-          if (g.lighting) {
-            nEC = normalMatrix * glm::normalize(n);
-            if (g.fixed)
+          nEC = glm::normalize(n);
+          if(g.lighting) {
+            if(g.fixed)
               glNormal3fv(&nEC[0]);
             else {
-              if (g.useShaders)
-                rEC = glm::vec3(glm::vec4(r, 1.0));
-              glm::vec3 c = computeLighting(rEC, nEC);
+              lrEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
+              lnEC = normalMatrix * glm::normalize(n);
+              c = computeLighting(lrEC, lnEC);
+              glColor3fv(&c[0]);
+            }
+          }
+        } else {
+          rEC = glm::vec3(modelViewMatrix * glm::vec4(r, 1.0));
+          nEC = normalMatrix * glm::normalize(n);
+          if(g.lighting) {
+            if(g.fixed)
+              glNormal3fv(&nEC[0]);
+            else {
+              c = computeLighting(rEC, nEC);
               glColor3fv(&c[0]);
             }
           }
@@ -1054,6 +1107,7 @@ void drawSineWave(int tess)
     }
   }
 
+  // Disable use of shaders if originally enabled
   if(g.useShaders)
     glUseProgram(0);
   if (g.lighting)
@@ -1117,6 +1171,7 @@ void idle()
   glutPostRedisplay();
 }
 
+/* ########## DISPLAY BETWEEN MULTIVIEW/SINGLE ########## */
 void displayMultiView()
 {
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -1218,8 +1273,14 @@ void display()
   }
 }
 
+/* ########## USER INPUT ########## */
 void keyboard(unsigned char key, int x, int y)
 {
+  /* Three states for osd (able to toggle between them)
+   * 1. Frame related information
+   * 2. Flags (that have been set/unset)
+   * 3. Values (shininess, tesselation, dimension for sine wave)
+   */
   const char* osd[] = { "FRAME", "FLAGS", "VALUES" };
 
   switch (key) {
@@ -1234,7 +1295,7 @@ void keyboard(unsigned char key, int x, int y)
         g.lastT = glutGet(GLUT_ELAPSED_TIME) / milli;
       }
     }
-    printf("animtation: %s\n", g.animate?"true":"false");
+    printf("animation: %s\n", g.animate?"true":"false");
     break;
   case 'b': //smooth/flat shading
     g.flat = !g.flat;
@@ -1261,7 +1322,7 @@ void keyboard(unsigned char key, int x, int y)
     break;
   case 'g': //shaders
     g.useShaders = !g.useShaders;
-    if(g.vbo)
+    if(g.vbo) //redraw vbos if shaders toggled
       resetVBOS();
     printf("shaders: %s\n", g.useShaders?"true":"false");
     break;
@@ -1310,14 +1371,15 @@ void keyboard(unsigned char key, int x, int y)
     g.wave = !g.wave;
     if (!g.wave)
       g.animate = false;
-    if(g.vbo)
+    if(g.vbo) //when shape changed, initialize new shape using vbos (if on)
       resetVBOS();
     printf("wave: %s\n", g.wave?"true":"false");
     break;
   case 'v': //VBO mode
     g.vbo = !g.vbo;
+    //assumes vbo is initally off: initalize and bind (if default on, use resetVBOS())
     if (g.vbo) {
-      initVBO();
+      initVBOs();
       bindVBOs();
     }
     else
@@ -1334,7 +1396,7 @@ void keyboard(unsigned char key, int x, int y)
     g.waveDim++;
     if (g.waveDim > 3)
       g.waveDim = 2;
-    if(g.vbo)
+    if(g.vbo) //reset vbo when dimension changed (if on)
       resetVBOS();
     printf("dimension: %d\n", g.waveDim);
     glutPostRedisplay();
@@ -1367,8 +1429,6 @@ void keyboard(unsigned char key, int x, int y)
   default:
     break;
   }
-
-  //glutPostRedisplay();
 }
 
 void mouse(int button, int state, int x, int y)
@@ -1424,12 +1484,13 @@ void motion(int x, int y)
     break;
   }
 
-  if(g.vbo)
+  if(g.vbo) // When vbos on, recalculate when moving camera around
     resetVBOS();
 
   glutPostRedisplay();
 }
 
+/* ########## MAIN ########## */
 int main(int argc, char** argv)
 {
   glutInit(&argc, argv);

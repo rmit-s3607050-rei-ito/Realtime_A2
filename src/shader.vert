@@ -2,7 +2,7 @@
 
 #define M_PI 3.1415926535897932384626433832795
 
-uniform int uTesselation, uDimention;
+uniform int uTesselation, uDimension;
 uniform float uShininess, uTime;
 uniform bool uPhong, uPixel, uPositional, uFixed, uFlat, uLighting;
 uniform mat3 uNormalMat;
@@ -65,14 +65,15 @@ vec3 computeVertexLighting(vec3 rEC, vec3 nEC)
 
 vec4 calcSineYValue()
 {
+  // Obtain x and z values via gl_Vertex, calculate y values here
   vec4 v = gl_Vertex;
 
   const float A1 = 0.25, k1 = 2.0 * M_PI, w1 = 0.25;
   const float A2 = 0.25, k2 = 2.0 * M_PI, w2 = 0.25;
 
-  if (uDimention == 2) {
+  if (uDimension == 2) {
     v.y = A1 * sin(k1 * v.x + w1 * uTime);
-  } else if (uDimention == 3) {
+  } else if (uDimension == 3) {
     v.y = A1 * sin(k1 * v.x + w1 * uTime) + A2 * sin(k2 * v.z + w2 * uTime);
   }
 
@@ -81,18 +82,19 @@ vec4 calcSineYValue()
 
 vec3 calcNormals(vec4 vector)
 {
+  // Calculate normals here given vertex calculated above
   vec3 n;
 
   const float A1 = 0.25, k1 = 2.0 * M_PI, w1 = 0.25;
   const float A2 = 0.25, k2 = 2.0 * M_PI, w2 = 0.25;
 
-  if (uDimention == 2) {
+  if (uDimension == 2) {
     if (uLighting) {
       n.x = - A1 * k1 * cos(k1 * vector.x + w1 * uTime);
       n.y = 1.0;
       n.z = 0.0;
     }
-  } else if (uDimention == 3) {
+  } else if (uDimension == 3) {
     if (uLighting) {
       n.x = - A1 * k1 * cos(k1 * vector.x + w1 * uTime);
       n.y = 1.0;
