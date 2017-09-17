@@ -1300,30 +1300,22 @@ void keyboard(unsigned char key, int x, int y)
   case 'b': //smooth/flat shading
     g.flat = !g.flat;
     printf("flat: %s\n", g.flat?"true":"false");
-    glutPostRedisplay();
     break;
   case 'c': //console display
     g.consolePM = !g.consolePM;
     g.displayOSD = !g.displayOSD;
     printf("console: %s\n", g.consolePM?"true":"false");
-    glutPostRedisplay();
     break;
   case 'd': //directional/positional lighting
     g.positional = !g.positional;
     printf("positional: %s\n", g.positional?"true":"false");
-    glutPostRedisplay();
     break;
   case 'f': //gpu/cpu lighting
     g.fixed = !g.fixed;
-    if(g.vbo)
-      resetVBOS();
     printf("fixed: %s\n", g.fixed?"true":"false");
-    glutPostRedisplay();
     break;
   case 'g': //shaders
     g.useShaders = !g.useShaders;
-    if(g.vbo) //redraw vbos if shaders toggled
-      resetVBOS();
     printf("shaders: %s\n", g.useShaders?"true":"false");
     break;
   case 'H': //increase shininess
@@ -1331,48 +1323,39 @@ void keyboard(unsigned char key, int x, int y)
     if (g.shininess > 125.0)
       g.shininess = 125.0;
     printf("shininess: %.1f\n", g.shininess);
-    glutPostRedisplay();
     break;
   case 'h': //decrease shininess
     g.shininess -= 5.0;
     if (g.shininess < 5.0)
       g.shininess = 5.0;
     printf("shininess: %.1f\n", g.shininess);
-    glutPostRedisplay();
     break;
   case 'l': //lighting
     g.lighting = !g.lighting;
     printf("lighting: %s\n", g.lighting?"true":"false");
-    glutPostRedisplay();
     break;
   case 'm': //specular lighting mode (Blinn-Phong/Phong)
     g.phong = !g.phong;
     printf("phong: %s\n", g.phong?"true":"false");
-    glutPostRedisplay();
     break;
   case 'n': //normals
     g.drawNormals = !g.drawNormals;
     printf("normals: %s\n", g.drawNormals?"true":"false");
-    glutPostRedisplay();
     break;
   case 'o': // cycle OSD options (enum)
     g.option = static_cast<OSD>(g.option+1);
     if (g.option > VALUES)
       g.option = FRAME;
     printf("osd: %s\n", osd[g.option]);
-    glutPostRedisplay();
     break;
   case 'p': //per (vertex/pixel) lighting
     g.perPixel = !g.perPixel;
     printf("per pixel: %s\n", g.perPixel?"true":"flase");
-    glutPostRedisplay();
     break;
   case 's': //shape change
     g.wave = !g.wave;
     if (!g.wave)
       g.animate = false;
-    if(g.vbo) //when shape changed, initialize new shape using vbos (if on)
-      resetVBOS();
     printf("wave: %s\n", g.wave?"true":"false");
     break;
   case 'v': //VBO mode
@@ -1385,21 +1368,16 @@ void keyboard(unsigned char key, int x, int y)
     else
       unbindVBOs();
     printf("vbo: %s\n", g.vbo?"true":"false");
-    glutPostRedisplay();
     break;
   case 'w': //wireframe
     g.wireframe = !g.wireframe;
     printf("wireframe: %s\n", g.wireframe?"true":"false");
-    glutPostRedisplay();
     break;
   case 'z': //2D/3D wave
     g.waveDim++;
     if (g.waveDim > 3)
       g.waveDim = 2;
-    if(g.vbo) //reset vbo when dimension changed (if on)
-      resetVBOS();
     printf("dimension: %d\n", g.waveDim);
-    glutPostRedisplay();
     break;
   case '4': //multiview
     g.multiView = !g.multiView;
@@ -1408,27 +1386,24 @@ void keyboard(unsigned char key, int x, int y)
     else
       glutDisplayFunc(display);
     printf("multiview: %s\n", g.multiView?"true":"false");
-    glutPostRedisplay();
     break;
   case '+': //increase tesselation
     g.tess *= 2;
-    if (g.vbo)  // Recalculate VBOs due to change in tesselation
-      resetVBOS();
     printf("tesselation: %d\n", g.tess);
-    glutPostRedisplay();
     break;
   case '-': //decrease tesselation
     g.tess /= 2;
     if (g.tess < 8)
       g.tess = 8;
-    if (g.vbo)  // Recalculate VBOs due to change in tesselation
-      resetVBOS();
     printf("tesselation: %d\n", g.tess);
-    glutPostRedisplay();
     break;
   default:
     break;
   }
+
+  if (g.vbo)  // Recalculate VBOs due to mode change
+    resetVBOS();
+  glutPostRedisplay();
 }
 
 void mouse(int button, int state, int x, int y)
