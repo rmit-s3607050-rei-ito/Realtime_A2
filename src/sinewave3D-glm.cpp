@@ -960,8 +960,10 @@ void drawGrid(int tess)
 
 void drawSineWave(int tess)
 {
-  // Refresh vbo when animating
-  if (g.animate && g.vbo)
+  /* Refresh vbo when animating and not using shaders
+   * If shaders are in use, vbo doesn't need to be recalculated as the y values
+   * are instead update in the shader itself */
+  if (g.animate && g.vbo && !g.useShaders)
     resetVBOS();
 
   const float A1 = 0.25, k1 = 2.0 * M_PI, w1 = 0.25;
