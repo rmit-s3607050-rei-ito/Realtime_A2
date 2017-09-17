@@ -34,13 +34,15 @@ This must mean the lighting calculations that are made between the two must diff
 must have attenuation applied making the shading more accurate.
 
 2. Is there any performance difference between fixed pipeline and using shader lighting?
-There is a massive performance difference between the two lighting modes, shader being the better
-performer. This is probably because the lighting calculations for fixed are either heavier than the
-shader or are being done on the CPU, compared to the GPU.
+There is a massive performance difference between the two lighting modes, shader bolstering performance
+when fixed pipeline is also on by ~4x. By itself without fixed pipeline the shader doesn't have any other difference
+compared to when both are off. This is probably because the lighting calculations for fixed are either heavier than the shader or are being done on the CPU, compared to the GPU. The fixed pipeline itself will boost performance by 2x.
 
 We tested this using: Tesselation = 128, Filled Mode, 2D-Sine Wave
- a. Fixed pipeline lighting and Shader OFF = ~70 frame rate
- b. Shader ON and Fixed pipeline lighting OFF =
+ a. Fixed pipeline off and Shader off = ~40 frame rate
+ b. Fixed pipeline off and Shader on  = ~40 frame rate
+ c. Fixed pipeline on and Shader off  = ~70 frame rate
+ d. Fixed pipeline on and Shader on   = ~300 frame rate
 
 3. What overhead/slowdown factor is there for performing animation compared to static geometry using the vertex shader? For static i.e. geometry is it worth pre-computing and storing the sine wave values in buffers?
 

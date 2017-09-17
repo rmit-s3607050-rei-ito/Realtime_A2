@@ -857,6 +857,11 @@ void drawVBOShape()
 /* ########## DRAWING SHAPES (GRID/SINEWAVE) ########## */
 void drawGrid(int tess)
 {
+  /* Since there are 4 types of views being displayed at once, vbo has to update for each window
+   * shown in the multiView */
+  if(g.vbo && g.multiView)
+    resetVBOS();
+
   float stepSize = 2.0 / tess;
   glm::vec3 r, n, rEC, nEC;
   int i, j;
@@ -960,11 +965,16 @@ void drawGrid(int tess)
 
 void drawSineWave(int tess)
 {
-  /* Refresh vbo when animating and not using shaders
-   * If shaders are in use, vbo doesn't need to be recalculated as the y values
-   * are instead update in the shader itself */
-  if (g.animate && g.vbo && !g.useShaders)
-    resetVBOS();
+  /* [1]. Refresh sine wave only when not using shaders because if shaders are in use,
+   * vbo doesn't need to be recalculated. The y values are instead updated in GPU.
+   * [2]. When shaders off however, reset the vbo for when it is animating or if
+   * the display is set to multiView, as there are 4 differing types that need to be
+   * rendered */
+
+  if(g.vbo && !g.useShaders) {
+    if(g.animate || g.multiView)
+      resetVBOS();
+  }
 
   const float A1 = 0.25, k1 = 2.0 * M_PI, w1 = 0.25;
   const float A2 = 0.25, k2 = 2.0 * M_PI, w2 = 0.25;
